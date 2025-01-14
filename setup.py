@@ -55,7 +55,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 # loading version from setup.py
 with codecs.open(
-    os.path.join(here, "template/__init__.py"), encoding="utf-8"
+    os.path.join(here, "climate/__init__.py"), encoding="utf-8" # TODO change
 ) as init_file:
     version_match = re.search(
         r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
@@ -63,16 +63,16 @@ with codecs.open(
     version_string = version_match.group(1)
 
 setup(
-    name="bittensor_subnet_template",  # TODO(developer): Change this value to your module subnet name.
+    name="ClimateAI",  # TODO(developer): Change this value to your module subnet name.
     version=version_string,
-    description="bittensor_subnet_template",  # TODO(developer): Change this value to your module subnet description.
+    description="Climate AI subnet by Orpheus A.I.",  # TODO(developer): Change this value to your module subnet description.
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/opentensor/bittensor-subnet-template",  # TODO(developer): Change this url to your module subnet github url.
-    author="bittensor.com",  # TODO(developer): Change this value to your module subnet author name.
+    url="https://github.com/Orpheus-AI/ClimateAI",  # TODO(developer): Change this url to your module subnet github url.
+    author="orpheus-ai.nl",  # TODO(developer): Change this value to your module subnet author name.
     packages=find_packages(),
     include_package_data=True,
-    author_email="",  # TODO(developer): Change this value to your module subnet author email.
+    author_email="info@orpheus-ai.nl",  # TODO(developer): Change this value to your module subnet author email.
     license="MIT",
     python_requires=">=3.8",
     install_requires=requirements,
