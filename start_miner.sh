@@ -1,0 +1,1 @@
+python3 neurons/miner.py --subtensor.chain_endpoint ws://127.0.0.1:9944 --netuid 1 --wallet.name owner --wallet.hotkey miner --axon.port 8080 --logging.info

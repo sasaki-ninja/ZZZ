@@ -18,52 +18,57 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
+import torch
 import typing
 import bittensor as bt
 
-# Bittensor Miner Template:
-import climate
-
-# import base miner class which takes care of most of the boilerplate
+import numpy as np
+from climate.utils.config import get_device_str
+from climate.protocol import TimePredictionSynapse
 from climate.base.miner import BaseMinerNeuron
 
 
 class Miner(BaseMinerNeuron):
     """
-    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.
-
-    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom
+    Your miner neuron class. You should use this class to define your miner's behavior. 
+    In particular, you should replace the forward function with your own logic. 
+    You may also want to override the blacklist and priority functions according to your needs.
     """
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-        # TODO(developer): Anything specific to your use case you can do here
+        self.device: torch.device = torch.device(get_device_str())
+        # TODO(miner): Anything specific to your use case you can do here
 
     async def forward(
-        self, synapse: climate.protocol.Dummy
-    ) -> climate.protocol.Dummy:
+        self, synapse: TimePredictionSynapse
+    ) -> TimePredictionSynapse:
         """
-        Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
-        This method should be replaced with actual logic relevant to the miner's purpose.
+        Processes the incoming TimePredictionSynapse by performing a predefined operation on the input data.
 
         Args:
-            synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
+            synapse (TimePredictionSynapse): The synapse object containing the input data.
 
         Returns:
-            template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
-        The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
-        the miner's intended operation. This method demonstrates a basic transformation of input data.
+            TimePredictionSynapse: The synapse object with the 'predictions' field set to a numpy array".
         """
-        # TODO(developer): Replace with actual implementation logic.
-        synapse.dummy_output = synapse.dummy_input * 2
+        # shape (hours, lat, lon, vars), where vars=(lat, lon, temperature)
+        bt.logging.info("we are receiving a synapse in between our crazy sync")
+        input_data: torch.Tensor = torch.tensor(synapse.input_data)
+        num_requested_hours: int = synapse.requested_hours
+
+        # TODO (miner) you might want to do something more intelligent than taking the mean over all time points:)
+        input_temperature_only = input_data[..., 2:].squeeze()
+        output = input_temperature_only.mean(dim=0)
+        output = output.expand(num_requested_hours, *output.shape)
+        ##########################################################################################################
+
+        synapse.predictions = output.tolist()
         return synapse
 
     async def blacklist(
-        self, synapse: climate.protocol.Dummy
+        self, synapse: TimePredictionSynapse
     ) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
@@ -126,7 +131,7 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: climate.protocol.Dummy) -> float:
+    async def priority(self, synapse: TimePredictionSynapse) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.
@@ -169,5 +174,5 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            bt.logging.info(f"Miner running... {time.time()}")
+            bt.logging.info(f"Miner running | uid {miner.uid} | {time.time()}")
             time.sleep(5)

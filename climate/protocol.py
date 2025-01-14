@@ -19,8 +19,12 @@
 
 import typing
 import bittensor as bt
+import torch
 
-# TODO(developer): Rewrite with your protocol definition.
+from pydantic import Field
+from typing import List
+
+
 
 # This is the protocol for the dummy miner and validator.
 # It is a simple request-response protocol where the validator sends a request
@@ -40,37 +44,47 @@ import bittensor as bt
 #   assert dummy_output == 2
 
 
-class Dummy(bt.Synapse):
+class TimePredictionSynapse(bt.Synapse):
     """
-    A simple dummy protocol representation which uses bt.Synapse as its base.
-    This protocol helps in handling dummy request and response communication between
+    A protocol representation which uses bt.Synapse as its base.
+    This protocol helps in handling request and response communication between
     the miner and the validator.
 
     Attributes:
-    - dummy_input: An integer value representing the input request sent by the validator.
-    - dummy_output: An optional integer value which, when filled, represents the response from the miner.
+    - input_data: The numpy tensor to be used as input for enviromental prediction.
+    - requested_hours: Number of output hours the miners should return.
+    - predictions: The output tensor to be scored. Needs a value for each requested hour AND for each latitude and longitude in the input.
     """
 
     # Required request input, filled by sending dendrite caller.
-    dummy_input: int
+    input_data: List[List[List[List[float]]]] = Field(
+        title="Input",
+        description="The numpy tensor to be used as input for enviromental prediction.",
+        default=[],
+        frozen=False,
+    )
+
+    requested_hours: int = Field(
+        title="Number of hours",
+        description="The number of desired output hours for the prediction.",
+        default=1,
+        frozen=False,
+    )
 
     # Optional request output, filled by receiving axon.
-    dummy_output: typing.Optional[int] = None
+    predictions: List[List[List[float]]] = Field(
+        title="Prediction",
+        description="The output tensor to be scored.",
+        default=[],
+        frozen=False,
+    )
 
-    def deserialize(self) -> int:
+    def deserialize(self) -> torch.Tensor:
         """
-        Deserialize the dummy output. This method retrieves the response from
-        the miner in the form of dummy_output, deserializes it and returns it
-        as the output of the dendrite.query() call.
+        Deserialize the output. This method retrieves the response from
+        the miner, deserializes it and returns it as the output of the dendrite.query() call.
 
         Returns:
-        - int: The deserialized response, which in this case is the value of dummy_output.
-
-        Example:
-        Assuming a Dummy instance has a dummy_output value of 5:
-        >>> dummy_instance = Dummy(dummy_input=4)
-        >>> dummy_instance.dummy_output = 5
-        >>> dummy_instance.deserialize()
-        5
+        - np.ndarray: The deserialized response
         """
-        return self.dummy_output
+        return torch.tensor(self.predictions)

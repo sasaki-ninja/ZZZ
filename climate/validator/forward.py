@@ -20,7 +20,8 @@
 import time
 import bittensor as bt
 
-from climate.protocol import Dummy
+import torch
+from climate.protocol import TimePredictionSynapse
 from climate.validator.reward import get_rewards
 from climate.utils.uids import get_random_uids
 
@@ -35,29 +36,39 @@ async def forward(self):
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
-    # TODO(developer): Define how the validator selects a miner to query, how often, etc.
+    # Let's sample some data
+    bt.logging.info(f"Sampling data...")
+    input_data, output_data = self.data_loader.get_random_sample()
+    output_data = output_data[..., 2:].squeeze() # slice off the latitude and longitude, miner's don't need to return that it
+
+    bt.logging.success(f"Data sampled. Input shape: {input_data.shape} | Output shape: {output_data.shape}")	
+
     # get_random_uids is an example method, but you can replace it with your own.
     miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    axons=[self.metagraph.axons[uid] for uid in miner_uids]
+
+    synapse = TimePredictionSynapse(input_data=input_data.tolist(), requested_hours=output_data.shape[0])
 
     # The dendrite client queries the network.
+    bt.logging.info(f"Querying {len(miner_uids)} miners..")
+    start = time.time()
     responses = await self.dendrite(
-        # Send the query to selected miner axons in the network.
-        axons=[self.metagraph.axons[uid] for uid in miner_uids],
-        # Construct a dummy query. This simply contains a single integer.
-        synapse=Dummy(dummy_input=self.step),
-        # All responses have the deserialize function called on them before returning.
-        # You are encouraged to define your own deserialization function.
+        axons=axons,
+        synapse=synapse,
         deserialize=True,
+        timeout=self.config.neuron.timeout,
     )
 
-    # Log the results for monitoring purposes.
-    bt.logging.info(f"Received responses: {responses}")
-
-    # TODO(developer): Define how the validator scores responses.
-    # Adjust the scores based on responses from miners.
-    rewards = get_rewards(self, query=self.step, responses=responses)
-
-    bt.logging.info(f"Scored responses: {rewards}")
-    # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
+    bt.logging.success(f"Responses received in {time.time() - start}s")
+    # Score miners
+    rewards = get_rewards(correct_outputs=output_data, responses=responses)
+     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
-    time.sleep(5)
+
+    for uid, response, reward in zip(miner_uids, responses, rewards):
+        if len(response) != 0:
+            bt.logging.success(f"UID: {uid} | Predicted shape: {response.shape} | Reward: {reward}")
+
+    if not self.config.wandb.off:
+        # TODO, actually log WandB, maybe cool to log plots as well?
+        pass

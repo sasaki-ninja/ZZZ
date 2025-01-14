@@ -20,10 +20,11 @@ import os
 import subprocess
 import argparse
 import bittensor as bt
+import torch
 from .logging import setup_events_logger
 
 
-def is_cuda_available():
+def get_device_str() -> str:
     try:
         output = subprocess.check_output(
             ["nvidia-smi", "-L"], stderr=subprocess.STDOUT
@@ -39,6 +40,8 @@ def is_cuda_available():
     except Exception:
         pass
     return "cpu"
+
+
 
 
 def check_config(cls, config: "bt.Config"):
@@ -78,7 +81,7 @@ def add_args(cls, parser):
         "--neuron.device",
         type=str,
         help="Device to run on.",
-        default=is_cuda_available(),
+        default=get_device_str(),
     )
 
     parser.add_argument(

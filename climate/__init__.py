@@ -17,8 +17,6 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-# TODO(developer): Change this value when updating your code base.
-# Define the version of the template module.
 __version__ = "0.0.1"
 version_split = __version__.split(".")
 __spec_version__ = (
@@ -32,4 +30,3 @@ from . import protocol
 from . import base
 from . import validator
 from . import api
-from .subnet_links import SUBNET_LINKS
