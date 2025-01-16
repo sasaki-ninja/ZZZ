@@ -24,7 +24,7 @@ import torch
 
 from neurons.validator import Validator
 from climate.base.validator import BaseValidatorNeuron
-from climate.protocol import Dummy
+from climate.protocol import TimePredictionSynapse
 from climate.utils.uids import get_random_uids
 from climate.validator.reward import get_rewards
 
@@ -68,7 +68,7 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
                 self.neuron.metagraph.axons[uid] for uid in self.miner_uids
             ],
             # Construct a dummy query.
-            synapse=Dummy(dummy_input=self.neuron.step),
+            synapse=TimePredictionSynapse(dummy_input=self.neuron.step),
             # All responses have the deserialize function called on them before returning.
             deserialize=True,
         )
@@ -82,7 +82,7 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
             # Send the query to miners in the network.
             axons=[self.metagraph.axons[uid] for uid in self.miner_uids],
             # Construct a dummy query.
-            synapse=Dummy(dummy_input=self.neuron.step),
+            synapse=TimePredictionSynapse(dummy_input=self.neuron.step),
             # All responses have the deserialize function called on them before returning.
             deserialize=True,
         )
@@ -98,7 +98,7 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
             # Send the query to miners in the network.
             axons=[self.metagraph.axons[uid] for uid in self.miner_uids],
             # Construct a dummy query.
-            synapse=Dummy(dummy_input=self.neuron.step),
+            synapse=TimePredictionSynapse(dummy_input=self.neuron.step),
             # All responses have the deserialize function called on them before returning.
             deserialize=True,
         )

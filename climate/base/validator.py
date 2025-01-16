@@ -32,7 +32,7 @@ from climate.base.neuron import BaseNeuron
 from climate.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
-)  # TODO: Replace when bittensor switches to numpy
+)
 from climate.mock import MockDendrite
 from climate.utils.config import add_validator_args
 

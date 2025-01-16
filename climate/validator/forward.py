@@ -19,9 +19,9 @@
 
 import time
 import bittensor as bt
+import wandb
 
-import torch
-from climate.protocol import TimePredictionSynapse
+from climate.data.sample import Era5Sample
 from climate.validator.reward import get_rewards
 from climate.utils.uids import get_random_uids
 
@@ -38,30 +38,27 @@ async def forward(self):
     """
     # Let's sample some data
     bt.logging.info(f"Sampling data...")
-    input_data, output_data = self.data_loader.get_random_sample()
-    output_data = output_data[..., 2:].squeeze() # slice off the latitude and longitude, miner's don't need to return that it
+    sample: Era5Sample = self.data_loader.get_random_sample()
 
-    bt.logging.success(f"Data sampled. Input shape: {input_data.shape} | Output shape: {output_data.shape}")	
+    bt.logging.success(f"Data sampled. Input shape: {sample.input_data.shape} | Output shape: {sample.output_data.shape}")	
 
-    # get_random_uids is an example method, but you can replace it with your own.
+    # get some miners
     miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
     axons=[self.metagraph.axons[uid] for uid in miner_uids]
-
-    synapse = TimePredictionSynapse(input_data=input_data.tolist(), requested_hours=output_data.shape[0])
 
     # The dendrite client queries the network.
     bt.logging.info(f"Querying {len(miner_uids)} miners..")
     start = time.time()
     responses = await self.dendrite(
         axons=axons,
-        synapse=synapse,
+        synapse=sample.get_synapse(),
         deserialize=True,
         timeout=self.config.neuron.timeout,
     )
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
     # Score miners
-    rewards = get_rewards(correct_outputs=output_data, responses=responses)
+    rewards, metrics = get_rewards(correct_outputs=sample.output_data, responses=responses)
      # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
 
@@ -70,5 +67,28 @@ async def forward(self):
             bt.logging.success(f"UID: {uid} | Predicted shape: {response.shape} | Reward: {reward}")
 
     if not self.config.wandb.off:
-        # TODO, actually log WandB, maybe cool to log plots as well?
-        pass
+        for miner_uid, metric_dict in zip(miner_uids, metrics):
+            wandb.log(
+                {
+                    f"miner_{miner_uid}_{key}": val 
+                    for key, val in metric_dict.items()
+                },
+                commit=False # All logging should be the same commit
+            )
+
+        wandb.log(
+            {
+                "start_timestamp": sample.start_timestamp,
+                "end_timestamp": sample.end_timestamp,
+                "predict_hours": sample.predict_hours,
+                "lat_lon_bbox": [
+                    sample.input_data[...,0].min(), 
+                    sample.input_data[...,0].max(),
+                    sample.input_data[...,1].min(),
+                    sample.input_data[...,1].max(),
+                ]
+            },
+        )
+
+    # Introduce a delay to prevent overloading the miner, as excessive requests can sometimes lead to an invalid miner response.
+    time.sleep(5)

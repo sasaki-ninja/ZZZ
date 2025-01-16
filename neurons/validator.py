@@ -21,10 +21,15 @@
 import time
 
 import bittensor as bt
+import wandb
 
+import climate
 from climate.base.validator import BaseValidatorNeuron
-from climate.validator import forward
-from climate.data.era5 import ERA5DataLoader
+from climate.validator.forward import forward
+from climate.data.era5_loader import ERA5DataLoader
+from climate.validator.constants import (
+    MAINNET_UID,
+)
 
 
 class Validator(BaseValidatorNeuron):
@@ -43,6 +48,7 @@ class Validator(BaseValidatorNeuron):
         self.load_state()
 
         self.data_loader = ERA5DataLoader()
+        self.init_wandb()
 
     async def forward(self):
         """
@@ -54,6 +60,42 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         return await forward(self)
+    
+    def init_wandb(self):
+        if self.config.wandb.off:
+            return
+
+        run_name = f'validator-{self.uid}-{climate.__version__}'
+        self.config.run_name = run_name
+        self.config.uid = self.uid
+        self.config.hotkey = self.wallet.hotkey.ss58_address
+        self.config.version = climate.__version__
+        self.config.type = self.neuron_type
+
+        wandb_project = self.config.wandb.project_name if self.config.netuid == MAINNET_UID else self.config.wandb.testnet_project_name
+
+        # Initialize the wandb run for the single project
+        bt.logging.info(f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'")
+        try:
+            run = wandb.init(
+                name=run_name,
+                project=wandb_project,
+                entity=self.config.wandb.entity,
+                config=self.config,
+                dir=self.config.full_path,
+                reinit=True
+            )
+        except wandb.UsageError as e:
+            bt.logging.warning(e)
+            bt.logging.warning("Did you run wandb login?")
+            return
+
+        # Sign the run to ensure it's from the correct hotkey
+        signature = self.wallet.hotkey.sign(run.id.encode()).hex()
+        self.config.signature = signature
+        wandb.config.update(self.config, allow_val_change=True)
+
+        bt.logging.success(f"Started wandb run {run_name}")
 
 
 # The main function parses the configuration and runs the validator.

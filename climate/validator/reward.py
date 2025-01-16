@@ -16,7 +16,7 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-from typing import List
+from typing import List, Tuple, Dict
 import numpy as np
 import torch
 import bittensor as bt
@@ -36,11 +36,11 @@ def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> t
         return response
     
     if correct.ndim + 1 == response.ndim and response.shape[-1] == 1:
-        # miner forgot to unsqueeze.
+        # miner forgot to squeeze.
         return response.squeeze()
     
     if correct.shape[:-1] == response.shape[:-1] and (correct.shape[-1] + 2) == response.shape[-1]:
-        # miner included lat and longitude, slice those off
+        # miner included latitude and longitude, slice those off
         return response[..., 2:]
     return response
 
@@ -53,39 +53,21 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
         response (torch.Tensor): The response tensor from the miner.
 
     Returns:
-        float: 0.0 if prediction is invalid, 1.0 if valid
+        float: 0.0 if prediction is valid, 1.0 if invalid
     """
     valid = True
     if response.shape != correct.shape:
         valid = False
-    elif not torch.isfinite(response).any():
+    elif not torch.isfinite(response).all():
         valid = False
     
-    return 1.0 if valid else 0.0
-
-
-def reward(correct: torch.Tensor, response: torch.Tensor) -> float:
-    """
-    Reward the miner response to the request. This method returns a reward
-    value for the miner, which is used to update the miner's score.
-
-    Returns:
-    - float: The reward value for the miner.
-    """
-    response = help_format_miner_output(correct, response)
-    penalty = compute_penalty(correct, response)
-    if penalty == 0.0:
-        return penalty
-    
-    MSE = ((response - correct) ** 2).mean()
-    # Miners should get the lowest MSE. If more than 10 MSE, just get 0 reward.
-    return max(0.0, 1.0 - MSE / 10.0)
+    return 0.0 if valid else 1.0
 
 
 def get_rewards(
     correct_outputs: torch.Tensor,
     responses: List[torch.Tensor],
-) -> torch.Tensor:
+) -> Tuple[np.ndarray, List[Dict[str, float]]]:
     """
     Returns an array of rewards for the given query and responses.
 
@@ -95,7 +77,31 @@ def get_rewards(
 
     Returns:
     - np.ndarray: An array of rewards for the given query and responses.
+    - List[Dict[str, float]]: A list of metrics and scores for each miner as a dictionary.
     """
-    # Get all the reward results by iteratively calling your reward() function.
+    miner_rewards = []
+    miner_metrics = []
+    
+    for response in responses:
+        RMSE = -1.0 # default values if penalty occurs
+        score = 0.0
 
-    return np.array([reward(correct_outputs, response) for response in responses])
+        response = help_format_miner_output(correct_outputs, response)
+        penalty = compute_penalty(correct_outputs, response)
+
+        # only score if no penalty
+        if penalty == 0.0:
+            RMSE = ((response - correct_outputs) ** 2).mean().sqrt()
+             # Miners should get the lowest MSE. If more than 5 MSE, just get 0 reward.
+            score = max(0.0, 1.0 - RMSE / 5.0)
+        
+        miner_rewards.append(score)
+        miner_metrics.append(
+            {
+                "penalty": penalty,
+                "RMSE": RMSE, 
+                "score": score
+             }
+        )
+ 
+    return np.array(miner_rewards), miner_metrics

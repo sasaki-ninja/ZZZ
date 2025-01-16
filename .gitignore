@@ -163,3 +163,8 @@ testing/
 
 # Editors
 .vscode/settings.json
+
+# CUSTOM
+*.env
+*~
+wandb/

@@ -16,10 +16,10 @@ The following is a set of guidelines for contributing to the Bittensor ecosystem
 
 
 ## How Can I Contribute?
-TODO(developer): Define your desired contribution procedure.
+If you encounter any issues in the current subnet codebase, please reach out to the team at Ørpheus A.I. on Discord.
 
 ## Communication Channels
-TODO(developer): Place your communication channels here
+Our preferred means of contact is through our Discord channel in the Bittensor server. Alternatively, you can create a issue on GitHub.
 
 > Please follow the Bittensor Subnet [style guide](./STYLE.md) regardless of your contribution type. 
 
@@ -99,7 +99,7 @@ After you submit a pull request, it will be reviewed by the maintainers. They ma
 > Note: Be sure to merge the latest from "upstream" before making a pull request:
 
 ```bash
-git remote add upstream https://github.com/opentensor/bittensor.git # TODO(developer): replace with your repo URL
+git remote add upstream https://github.com/Orpheus-AI/ClimateAI
 git fetch upstream
 git merge upstream/<your-branch-name>
 git push origin <your-branch-name>

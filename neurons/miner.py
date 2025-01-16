@@ -51,12 +51,12 @@ class Miner(BaseMinerNeuron):
             synapse (TimePredictionSynapse): The synapse object containing the input data.
 
         Returns:
-            TimePredictionSynapse: The synapse object with the 'predictions' field set to a numpy array".
+            TimePredictionSynapse: The synapse object with the 'predictions' field set".
         """
         # shape (hours, lat, lon, vars), where vars=(lat, lon, temperature)
-        bt.logging.info("we are receiving a synapse in between our crazy sync")
         input_data: torch.Tensor = torch.tensor(synapse.input_data)
         num_requested_hours: int = synapse.requested_hours
+        bt.logging.info(f"We are receiving input of shape {input_data.shape} and we are requested to predict {num_requested_hours} hours.")
 
         # TODO (miner) you might want to do something more intelligent than taking the mean over all time points:)
         input_temperature_only = input_data[..., 2:].squeeze()
@@ -99,14 +99,12 @@ class Miner(BaseMinerNeuron):
 
         Otherwise, allow the request to be processed further.
         """
-
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning(
                 "Received a request without a dendrite or hotkey."
             )
             return True, "Missing dendrite or hotkey"
 
-        # TODO(developer): Define how miners should blacklist requests.
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
             not self.config.blacklist.allow_non_registered
@@ -157,7 +155,6 @@ class Miner(BaseMinerNeuron):
             )
             return 0.0
 
-        # TODO(developer): Define how miners should prioritize requests.
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey
         )  # Get the caller index.

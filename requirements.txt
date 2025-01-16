@@ -1,5 +1,6 @@
 bittensor==8.5.1
 starlette>=0.30.0
+wandb==0.19.0
 pydantic>=2
 torch>=2.4.0
 dask>=2024.11.2
