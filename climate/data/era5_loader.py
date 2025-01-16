@@ -80,20 +80,21 @@ class ERA5DataLoader:
         return start_timestamp, end_timestamp, num_predict_hours
 
 
-    def get_random_sample(self) -> Era5Sample:
+    def get_data(
+            self, 
+            lat_start: float,
+            lat_end: float,
+            lon_start: float,
+            lon_end: float,
+            start_time: pd.Timestamp, 
+            end_time: pd.Timestamp,
+    ) -> torch.Tensor:
         """
-        Get a random sample from the dataset. This sample includes a tiny bit of noise on the input to prevent hashing lookups.
+        Get a sample from the dataset for a specific location and time range.
 
         Returns:
-         - sample (Era5Sample): The sample containing the input and output data.
+         - sample (torch.Tensor): The sample containing the input and output data as a 4D tensor.
         """
-        # get a random rectangular bounding box
-        lat_start = np.random.uniform(self.lat_range[0], self.lat_range[1] - self.area_sample_range[1])
-        lat_end = lat_start + np.random.uniform(*self.area_sample_range)
-        lon_start = np.random.randint(self.lon_range[0], self.lon_range[1] - self.area_sample_range[1])
-        lon_end = lon_start + np.random.uniform(*self.area_sample_range)
-
-        start_time, end_time, predict_hours = self._sample_time_range()
 
         subset = self.dataset.sel(
             latitude=slice(lat_start, lat_end), 
@@ -127,6 +128,34 @@ class ERA5DataLoader:
                     dim=-1
                 ) # (time, lat, lon, data_vars)
         data = torch.cat([x_grid, y_grid], dim=-1)
+
+        return data
+
+
+    def get_random_sample(self) -> Era5Sample:
+        """
+        Get a random sample from the dataset. This sample includes a tiny bit of noise on the input to prevent hashing lookups.
+
+        Returns:
+         - sample (Era5Sample): The sample containing the input and output data.
+        """
+        # get a random rectangular bounding box
+        lat_start = np.random.uniform(self.lat_range[0], self.lat_range[1] - self.area_sample_range[1])
+        lat_end = lat_start + np.random.uniform(*self.area_sample_range)
+        lon_start = np.random.randint(self.lon_range[0], self.lon_range[1] - self.area_sample_range[1])
+        lon_end = lon_start + np.random.uniform(*self.area_sample_range)
+
+        start_time, end_time, predict_hours = self._sample_time_range()
+
+        data = self.get_data(
+            lat_start=lat_start, 
+            lat_end=lat_end, 
+            lon_start=lon_start, 
+            lon_end=lon_end, 
+            start_time=start_time, 
+            end_time=end_time
+        )
+
         input_data = data[:-predict_hours]
         output_data = data[-predict_hours:]
 

@@ -25,4 +25,5 @@ pm2 start neurons/validator.py --name $VALIDATOR_PROCESS_NAME -- \
   --wallet.name $WALLET_NAME \
   --wallet.hotkey $WALLET_HOTKEY \
   --axon.port $AXON_PORT \
+  --proxy.port $PROXY_PORT \
   --logging.info

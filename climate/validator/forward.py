@@ -62,9 +62,13 @@ async def forward(self):
      # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
 
+    miners_scores = {}
     for uid, response, reward in zip(miner_uids, responses, rewards):
         if len(response) != 0:
+            miners_scores[uid] = reward
             bt.logging.success(f"UID: {uid} | Predicted shape: {response.shape} | Reward: {reward}")
+    # store best miners for the Proxy
+    self.last_responding_miner_uids = sorted(miners_scores, key=miners_scores.get, reverse=True)
 
     if not self.config.wandb.off:
         for miner_uid, metric_dict in zip(miner_uids, metrics):

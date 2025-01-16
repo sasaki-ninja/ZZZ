@@ -26,7 +26,7 @@ from abc import ABC, abstractmethod
 from climate.utils.config import check_config, add_args, config
 from climate.utils.misc import ttl_get_block
 from climate import __spec_version__ as spec_version
-from climate.mock import MockSubtensor, MockMetagraph
+from climate.utils.mock import MockSubtensor, MockMetagraph
 
 
 class BaseNeuron(ABC):

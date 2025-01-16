@@ -24,6 +24,7 @@ import bittensor as bt
 import wandb
 
 import climate
+from climate.api.proxy import ValidatorProxy
 from climate.base.validator import BaseValidatorNeuron
 from climate.validator.forward import forward
 from climate.data.era5_loader import ERA5DataLoader
@@ -43,9 +44,10 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
-
-        bt.logging.info("load_state()")
         self.load_state()
+
+        self.last_responding_miner_uids = []
+        self.validator_proxy = ValidatorProxy(self)
 
         self.data_loader = ERA5DataLoader()
         self.init_wandb()

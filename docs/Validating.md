@@ -74,6 +74,7 @@ WALLET_HOTKEY=default
 # Note: If you're using RunPod, you must select a port >= 70000 for symmetric mapping
 # Validator Port Setting:
 AXON_PORT=8092
+PROXY_PORT=10913
 
 # API Keys:
 WANDB_API_KEY=your_wandb_api_key_here

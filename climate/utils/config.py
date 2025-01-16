@@ -256,6 +256,13 @@ def add_validator_args(cls, parser):
         default="orpheus-ai",
     )
 
+    parser.add_argument(
+        "--proxy.port",
+        type=int,
+        help="The port to run the proxy on.",
+        default=10913
+    )
+
 
 def config(cls):
     """
