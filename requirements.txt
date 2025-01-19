@@ -4,7 +4,7 @@ pydantic>=2
 
 torch>=2.4.0
 dask>=2024.11.2
-zarr==3.0.0
+zarr
 gcsfs==2024.12.0
 pandas>=2.2.0
 xarray>=2024.11.0
