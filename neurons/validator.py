@@ -30,6 +30,7 @@ from climate.validator.forward import forward
 from climate.data.era5_loader import ERA5DataLoader
 from climate.validator.constants import (
     MAINNET_UID,
+    DIFFICULTIES,
 )
 
 
@@ -51,6 +52,8 @@ class Validator(BaseValidatorNeuron):
 
         self.data_loader = ERA5DataLoader()
         self.init_wandb()
+
+        self.difficulties = DIFFICULTIES
 
     async def forward(self):
         """

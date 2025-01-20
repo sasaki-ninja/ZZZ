@@ -63,17 +63,45 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     
     return 0.0 if valid else 1.0
 
+def get_grid_lats_lons(sample_input_data: torch.Tensor) -> List[Tuple[float, float]]:
+    # Extract latitude and longitude
+    lat_lon_points = data[..., :2]  # Select only the latitude and longitude
+    unique_lat_lon = lat_lon_points.view(-1, 2).unique(dim=0)  # Flatten and get unique points
+
+    # Convert to a list of tuples if desired
+    unique_lat_lon_list = [tuple(point.tolist()) for point in unique_lat_lon]
+
+    return unique_lat_lon_list  
+
+def count_climate_types_grid(grid_lats_lons: List[Tuple[float, float]], climate_grid: dict) -> dict:
+    climate_counts = dict()
+    for lat, lon in grid_lats_lons:
+        climate_counts[climate_grid[lat][lon]] = climate_counts.get(climate_grid[lat][lon], 0) + 1
+    return climate_counts
+
+def get_difficulty(climate_counts: dict, difficulties: dict) -> float:
+    total_difficulty = 0
+    total_grid_points = 0
+    for climate in climate_counts:
+        total_difficulty += difficulties[climate] * climate_counts[climate]
+        total_grid_points += climate_counts[climate]
+
+    return total_difficulty / total_grid_points
 
 def get_rewards(
+    input_data: torch.Tensor,
     correct_outputs: torch.Tensor,
     responses: List[torch.Tensor],
+    difficulties: dict,
 ) -> Tuple[np.ndarray, List[Dict[str, float]]]:
     """
     Returns an array of rewards for the given query and responses.
 
     Args:
+    - input_data (torch.Tensor): The input data to the miner.
     - correct_outputs (torch.Tensor): The output the miner should aim to give.
     - responses (List[torch.Tensor]): A list of responses from the miners.
+    - difficulties (dict): A dictionary of difficulties for each climate type.
 
     Returns:
     - np.ndarray: An array of rewards for the given query and responses.
@@ -81,6 +109,12 @@ def get_rewards(
     """
     miner_rewards = []
     miner_metrics = []
+
+    # based on the climate types, we set a max RMSE for the task, 
+    # reflecting the difficulty of the forecast in that region
+    lat_lon_points = get_grid_lats_lons(input_data)
+    climate_counts_grid = count_climate_types_grid(lat_lon_points, climate_grid)
+    max_allowed_RMSE = get_difficulty(climate_counts_grid, difficulties)
     
     for response in responses:
         RMSE = -1.0 # default values if penalty occurs
@@ -93,13 +127,14 @@ def get_rewards(
         if penalty == 0.0:
             RMSE = ((response - correct_outputs) ** 2).mean().sqrt()
              # Miners should get the lowest MSE. If more than 5 MSE, just get 0 reward.
-            score = max(0.0, 1.0 - RMSE / 5.0)
+            score = max(0.0, 1.0 - RMSE / difficulty)
         
         miner_rewards.append(score)
         miner_metrics.append(
             {
                 "penalty": penalty,
                 "RMSE": RMSE, 
+                "max_allowed_RMSE": max_allowed_RMSE,
                 "score": score
              }
         )
