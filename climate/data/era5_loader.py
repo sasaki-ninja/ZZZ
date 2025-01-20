@@ -137,38 +137,45 @@ class ERA5DataLoader:
         Get a random sample from the dataset. This sample includes a tiny bit of noise on the input to prevent hashing lookups.
 
         Returns:
-         - sample (Era5Sample): The sample containing the input and output data.
+        - sample (Era5Sample): The sample containing the input and output data.
         """
         # get a random rectangular bounding box
         lat_start = np.random.uniform(self.lat_range[0], self.lat_range[1] - self.area_sample_range[1])
         lat_end = lat_start + np.random.uniform(*self.area_sample_range)
-        lon_start = np.random.randint(self.lon_range[0], self.lon_range[1] - self.area_sample_range[1])
+        lon_start = np.random.uniform(self.lon_range[0], self.lon_range[1] - self.area_sample_range[1])
         lon_end = lon_start + np.random.uniform(*self.area_sample_range)
 
         start_time, end_time, predict_hours = self._sample_time_range()
 
         data = self.get_data(
-            lat_start=lat_start, 
-            lat_end=lat_end, 
-            lon_start=lon_start, 
-            lon_end=lon_end, 
-            start_time=start_time, 
+            lat_start=lat_start,
+            lat_end=lat_end,
+            lon_start=lon_start,
+            lon_end=lon_end,
+            start_time=start_time,
             end_time=end_time
         )
 
         input_data = data[:-predict_hours]
         output_data = data[-predict_hours:]
 
-        # add noise to the input to make it impossible to hash-lookup the entire dataset
-        noise = torch.randn_like(input_data) * self.noise_factor
-        input_data = input_data + noise
+        # Separate latitude and longitude from the input data
+        lat_lon = input_data[..., :2]  # Extract latitude and longitude
+        other_data = input_data[..., 2:]  # Extract the rest of the data
 
-        # slice off the latitude and longitude, miner's don't need to return that
+        # Add noise only to the other data
+        noise = torch.randn_like(other_data) * self.noise_factor
+        noisy_other_data = other_data + noise
+
+        # Recombine the latitude/longitude with the noisy data
+        noisy_input_data = torch.cat((lat_lon, noisy_other_data), dim=-1)
+
+        # Slice off the latitude and longitude for the output
         output_data = output_data[..., 2:].squeeze()
-        
+
         return Era5Sample(
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
-            input_data=input_data,
+            input_data=noisy_input_data,
             output_data=output_data
         )
