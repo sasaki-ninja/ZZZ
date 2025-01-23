@@ -17,6 +17,8 @@ from climate.validator.constants import (
     ERA5_AREA_SAMPLE_RANGE,
     ERA5_HOURS_SAMPLE_RANGE,
     ERA5_HOURS_PREDICT_RANGE,
+    MIN_INTERPOLATION_DISTORTIONS,
+    MAX_INTERPOLATION_DISTORTIONS,
 )
 
 
@@ -32,7 +34,7 @@ class ERA5DataLoader:
         area_sample_range: Tuple[float, float] = ERA5_AREA_SAMPLE_RANGE, # in degrees, there is 4 measurements per degree.
         time_sample_range: Tuple[int, int] = ERA5_HOURS_SAMPLE_RANGE,
         predict_sample_range: Tuple[float, float] = ERA5_HOURS_PREDICT_RANGE,
-        noise_factor: float = 1e-6,
+        noise_factor: float = 1e-3,
 
     ) -> None:
         self.data_vars = data_vars
@@ -159,16 +161,11 @@ class ERA5DataLoader:
         input_data = data[:-predict_hours]
         output_data = data[-predict_hours:]
 
-        # Separate latitude and longitude from the input data
-        lat_lon = input_data[..., :2]  # Extract latitude and longitude
-        other_data = input_data[..., 2:]  # Extract the rest of the data
-
-        # Add noise only to the other data
-        noise = torch.randn_like(other_data) * self.noise_factor
-        noisy_other_data = other_data + noise
-
-        # Recombine the latitude/longitude with the noisy data
-        noisy_input_data = torch.cat((lat_lon, noisy_other_data), dim=-1)
+        num_distortions = np.random.randint(MIN_INTERPOLATION_DISTORTIONS, MAX_INTERPOLATION_DISTORTIONS)
+        input_data = interp_distort(input_data, num_distortions)
+        # Add noise only to the the variables data
+        noise = torch.randn(*input_data.shape[:-1], input_data.shape[-1] - 2) * self.noise_factor
+        input_data[..., -1:] += noise
 
         # Slice off the latitude and longitude for the output
         output_data = output_data[..., 2:].squeeze()
@@ -176,6 +173,25 @@ class ERA5DataLoader:
         return Era5Sample(
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
-            input_data=noisy_input_data,
+            input_data=input_data,
             output_data=output_data
         )
+
+
+def interp_distort(matrix: torch.Tensor, num_distortions: int) -> torch.Tensor:
+    """
+    Interpolate the matrix with some random noise.
+    """
+    for _ in range(num_distortions):
+        t = np.random.randint(1, matrix.shape[0] - 2)
+        lat = np.random.randint(1, matrix.shape[1] - 2)
+        lon = np.random.randint(1, matrix.shape[2] - 2)
+        offset_t, offset_lat, offset_lon = np.random.choice([-1, 1], size=3, replace=True)
+        alpha = np.random.uniform(0.0, 0.1)
+
+        matrix[t, lat, lon, 2:] = (
+            (1 - alpha) * matrix[t, lat, lon, 2:] + 
+            alpha * matrix[t + offset_t, lat + offset_lat, lon + offset_lon, 2:]
+        )
+
+    return matrix

@@ -20,6 +20,8 @@ from typing import List, Tuple, Dict
 import numpy as np
 import torch
 import bittensor as bt
+from climate.data.sample import Era5Sample
+from climate.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
 
 def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> torch.Tensor:
     """
@@ -63,45 +65,19 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     
     return 0.0 if valid else 1.0
 
-def get_grid_lats_lons(sample_input_data: torch.Tensor) -> List[Tuple[float, float]]:
-    # Extract latitude and longitude
-    lat_lon_points = data[..., :2]  # Select only the latitude and longitude
-    unique_lat_lon = lat_lon_points.view(-1, 2).unique(dim=0)  # Flatten and get unique points
-
-    # Convert to a list of tuples if desired
-    unique_lat_lon_list = [tuple(point.tolist()) for point in unique_lat_lon]
-
-    return unique_lat_lon_list  
-
-def count_climate_types_grid(grid_lats_lons: List[Tuple[float, float]], climate_grid: dict) -> dict:
-    climate_counts = dict()
-    for lat, lon in grid_lats_lons:
-        climate_counts[climate_grid[lat][lon]] = climate_counts.get(climate_grid[lat][lon], 0) + 1
-    return climate_counts
-
-def get_difficulty(climate_counts: dict, difficulties: dict) -> float:
-    total_difficulty = 0
-    total_grid_points = 0
-    for climate in climate_counts:
-        total_difficulty += difficulties[climate] * climate_counts[climate]
-        total_grid_points += climate_counts[climate]
-
-    return total_difficulty / total_grid_points
 
 def get_rewards(
-    input_data: torch.Tensor,
-    correct_outputs: torch.Tensor,
+    sample: Era5Sample,
     responses: List[torch.Tensor],
-    difficulties: dict,
+    difficulty_grid: np.ndarray,
 ) -> Tuple[np.ndarray, List[Dict[str, float]]]:
     """
     Returns an array of rewards for the given query and responses.
 
     Args:
-    - input_data (torch.Tensor): The input data to the miner.
-    - correct_outputs (torch.Tensor): The output the miner should aim to give.
+    - sample (Era5Sample): The data sampled including input and output.
     - responses (List[torch.Tensor]): A list of responses from the miners.
-    - difficulties (dict): A dictionary of difficulties for each climate type.
+    - difficulty_grid (np.ndarray): A matrix representing the difficulty of each coordinate in the sample.
 
     Returns:
     - np.ndarray: An array of rewards for the given query and responses.
@@ -110,31 +86,33 @@ def get_rewards(
     miner_rewards = []
     miner_metrics = []
 
-    # based on the climate types, we set a max RMSE for the task, 
-    # reflecting the difficulty of the forecast in that region
-    lat_lon_points = get_grid_lats_lons(input_data)
-    climate_counts_grid = count_climate_types_grid(lat_lon_points, climate_grid)
-    max_allowed_RMSE = get_difficulty(climate_counts_grid, difficulties)
-    
+    # based on historical time-derivate of variance we have calculated a difficulty per coordinate
+    # with some offset (the mean difficulty) and multiplier
+    z_score_grid = difficulty_grid * DIFFICULTY_MULTIPLIER + DIFFICULTY_OFFSET
+
     for response in responses:
         RMSE = -1.0 # default values if penalty occurs
         score = 0.0
 
-        response = help_format_miner_output(correct_outputs, response)
-        penalty = compute_penalty(correct_outputs, response)
+        response = help_format_miner_output(sample.output_data, response)
+        penalty = compute_penalty(sample.output_data, response)
 
         # only score if no penalty
         if penalty == 0.0:
-            RMSE = ((response - correct_outputs) ** 2).mean().sqrt()
-             # Miners should get the lowest MSE. If more than 5 MSE, just get 0 reward.
-            score = max(0.0, 1.0 - RMSE / difficulty)
+            RMSE = (
+                (
+                    (response - sample.output_data) / z_score_grid
+                ) ** 2
+            ).mean().sqrt()
+             # Miners should get the lowest MSE.
+            score = max(0.0, 1.0 - RMSE)
         
         miner_rewards.append(score)
         miner_metrics.append(
             {
                 "penalty": penalty,
                 "RMSE": RMSE, 
-                "max_allowed_RMSE": max_allowed_RMSE,
+                "avg_difficulty": difficulty_grid.mean(),
                 "score": score
              }
         )

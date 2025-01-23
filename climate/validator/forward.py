@@ -22,6 +22,7 @@ import bittensor as bt
 import wandb
 
 from climate.data.sample import Era5Sample
+from climate.utils.coordinates import get_bbox
 from climate.validator.reward import get_rewards
 from climate.utils.uids import get_random_uids
 
@@ -59,10 +60,9 @@ async def forward(self):
     bt.logging.success(f"Responses received in {time.time() - start}s")
     # Score miners
     rewards, metrics = get_rewards(
-        input_data=sample.input_data, # to extract the climate types based on lat, lon
-        correct_outputs=sample.output_data, # ground truth
+        sample=sample,
         responses=responses, # miner responses
-        difficulties=self.difficulties, # climate types
+        difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
         )
      # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
@@ -90,12 +90,7 @@ async def forward(self):
                 "start_timestamp": sample.start_timestamp,
                 "end_timestamp": sample.end_timestamp,
                 "predict_hours": sample.predict_hours,
-                "lat_lon_bbox": [
-                    sample.input_data[...,0].min(), 
-                    sample.input_data[...,0].max(),
-                    sample.input_data[...,1].min(),
-                    sample.input_data[...,1].max(),
-                ]
+                "lat_lon_bbox": get_bbox(sample.input_data),
             },
         )
 
