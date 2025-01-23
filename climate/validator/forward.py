@@ -58,7 +58,12 @@ async def forward(self):
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
     # Score miners
-    rewards, metrics = get_rewards(correct_outputs=sample.output_data, responses=responses)
+    rewards, metrics = get_rewards(
+        input_data=sample.input_data, # to extract the climate types based on lat, lon
+        correct_outputs=sample.output_data, # ground truth
+        responses=responses, # miner responses
+        difficulties=self.difficulties, # climate types
+        )
      # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
 
