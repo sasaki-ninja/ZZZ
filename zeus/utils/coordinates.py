@@ -6,6 +6,9 @@ def get_bbox(tensor: Union[np.ndarray, torch.Tensor]) -> Tuple[float, float, flo
     """
     Returns the bounding box of the given tensor, which should be 4 dimensional (time, lat, lon, variables). 
     Variables should be in order of latitude, longitude, and then the rest.
+
+    Returns:
+    - bbox (Tuple[float, float, float, float]): The bounding box of the tensor: Latitude start, latitude end, longitude start, longitude end.
     """
     lat_start = tensor[0, 0, 0, 0]
     lat_end = tensor[0, -1, 0, 0]

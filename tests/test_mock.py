@@ -1,8 +1,8 @@
 import pytest
 import asyncio
 import bittensor as bt
-from climate.utils.mock import MockDendrite, MockMetagraph, MockSubtensor
-from climate.protocol import TimePredictionSynapse
+from zeus.utils.mock import MockDendrite, MockMetagraph, MockSubtensor
+from zeus.protocol import TimePredictionSynapse
 
 
 @pytest.mark.parametrize("netuid", [1, 2, 3])

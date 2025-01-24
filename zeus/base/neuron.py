@@ -23,10 +23,10 @@ import bittensor as bt
 from abc import ABC, abstractmethod
 
 # Sync calls set weights and also resyncs the metagraph.
-from climate.utils.config import check_config, add_args, config
-from climate.utils.misc import ttl_get_block
-from climate import __spec_version__ as spec_version
-from climate.utils.mock import MockSubtensor, MockMetagraph
+from zeus.utils.config import check_config, add_args, config
+from zeus.utils.misc import ttl_get_block
+from zeus import __spec_version__ as spec_version
+from zeus.utils.mock import MockSubtensor, MockMetagraph
 
 
 class BaseNeuron(ABC):

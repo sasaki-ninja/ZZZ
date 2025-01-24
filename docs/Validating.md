@@ -57,7 +57,7 @@ btcli s register --netuid [testnet_uid] --wallet.name [wallet_name] --wallet.hot
 
 ## Validating
 Before launching your validator, make sure to create a file called `validator.env`. This file will not be tracked by git. 
-You can use the sample below as a starting point, but make sure to replace **wallet_name**, **wallet_hotkey**, and **axon_port**.
+You can use the sample below as a starting point, but make sure to replace **wallet_name**, **wallet_hotkey**, **axon_port**, **wandb_api_key** and **cds_api_key**.
 
 ```bash
 NETUID=34                                      # Network User ID options: 34, 168
@@ -78,7 +78,10 @@ PROXY_PORT=10913
 
 # API Keys:
 WANDB_API_KEY=your_wandb_api_key_here
+CDS_API_KEY=your_cds_api_key_here
 ```
+> [!IMPORTANT]
+> In order to send miners challenges involving the latest ERA5 data, you need to provide a Copernicus CDS API key. These can be obtained from the [following website](https://cds.climate.copernicus.eu/how-to-api). Please first create an account or login, and then scroll down until you see the code-box with 'key' in it on the 'How to API'-page. 
 
 If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord and we can provide one. Without W&B, miners will not be able to see their live scores, 
 so we highly recommend enabling this.

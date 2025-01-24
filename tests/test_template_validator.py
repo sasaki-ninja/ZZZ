@@ -23,10 +23,10 @@ import bittensor as bt
 import torch
 
 from neurons.validator import Validator
-from climate.base.validator import BaseValidatorNeuron
-from climate.protocol import TimePredictionSynapse
-from climate.utils.uids import get_random_uids
-from climate.validator.reward import get_rewards
+from zeus.base.validator import BaseValidatorNeuron
+from zeus.protocol import TimePredictionSynapse
+from zeus.utils.uids import get_random_uids
+from zeus.validator.reward import get_rewards
 
 
 class TemplateValidatorNeuronTestCase(unittest.TestCase):

@@ -28,13 +28,13 @@ import bittensor as bt
 from typing import List, Union
 from traceback import print_exception
 
-from climate.base.neuron import BaseNeuron
-from climate.base.utils.weight_utils import (
+from zeus.base.neuron import BaseNeuron
+from zeus.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
-from climate.utils.mock import MockDendrite
-from climate.utils.config import add_validator_args
+from zeus.utils.mock import MockDendrite
+from zeus.utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):

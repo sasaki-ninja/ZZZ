@@ -263,6 +263,13 @@ def add_validator_args(cls, parser):
         default=10913
     )
 
+    parser.add_argument(
+        "--cds.api_key",
+        type=str,
+        help="The api key for the CDS API from Copernicus.",
+        default=""
+    )
+
 
 def config(cls):
     """

@@ -23,8 +23,8 @@ import traceback
 
 import bittensor as bt
 
-from climate.base.neuron import BaseNeuron
-from climate.utils.config import add_miner_args
+from zeus.base.neuron import BaseNeuron
+from zeus.utils.config import add_miner_args
 
 from typing import Union
 

@@ -13,9 +13,9 @@ import traceback
 import httpx
 import base64
 
-from climate.utils.uids import get_random_uids
-from climate.validator.reward import help_format_miner_output, compute_penalty
-from climate.protocol import TimePredictionSynapse
+from zeus.utils.uids import get_random_uids
+from zeus.validator.reward import help_format_miner_output, compute_penalty
+from zeus.protocol import TimePredictionSynapse
 
 class ValidatorProxy:
     def __init__(

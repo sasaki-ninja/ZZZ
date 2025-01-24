@@ -20,8 +20,8 @@ from typing import List, Tuple, Dict
 import numpy as np
 import torch
 import bittensor as bt
-from climate.data.sample import Era5Sample
-from climate.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
+from zeus.data.sample import Era5Sample
+from zeus.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
 
 def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> torch.Tensor:
     """
@@ -67,7 +67,7 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
 
 
 def get_rewards(
-    sample: Era5Sample,
+    output_data: torch.Tensor,
     responses: List[torch.Tensor],
     difficulty_grid: np.ndarray,
 ) -> Tuple[np.ndarray, List[Dict[str, float]]]:
@@ -94,14 +94,14 @@ def get_rewards(
         RMSE = -1.0 # default values if penalty occurs
         score = 0.0
 
-        response = help_format_miner_output(sample.output_data, response)
-        penalty = compute_penalty(sample.output_data, response)
+        response = help_format_miner_output(output_data, response)
+        penalty = compute_penalty(output_data, response)
 
         # only score if no penalty
         if penalty == 0.0:
             RMSE = (
                 (
-                    (response - sample.output_data) / z_score_grid
+                    (response - output_data) / z_score_grid
                 ) ** 2
             ).mean().sqrt()
              # Miners should get the lowest MSE.

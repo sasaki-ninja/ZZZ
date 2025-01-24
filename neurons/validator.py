@@ -23,13 +23,15 @@ import time
 import bittensor as bt
 import wandb
 
-import climate
-from climate.api.proxy import ValidatorProxy
-from climate.base.validator import BaseValidatorNeuron
-from climate.validator.forward import forward
-from climate.data.era5_loader import ERA5DataLoader
-from climate.data.difficulty_loader import DifficultyLoader
-from climate.validator.constants import (
+import zeus
+from zeus.api.proxy import ValidatorProxy
+from zeus.base.validator import BaseValidatorNeuron
+from zeus.validator.forward import forward
+from zeus.data.era5.era5_google import ERA5GoogleLoader
+from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.difficulty_loader import DifficultyLoader
+from zeus.validator.database import ResponseDatabase
+from zeus.validator.constants import (
     MAINNET_UID,
 )
 
@@ -50,7 +52,11 @@ class Validator(BaseValidatorNeuron):
         self.last_responding_miner_uids = []
         self.validator_proxy = ValidatorProxy(self)
 
-        self.data_loader = ERA5DataLoader()
+        self.google_loader = ERA5GoogleLoader()
+        self.cds_loader = Era5CDSLoader(self.config)
+
+        self.database = ResponseDatabase(self.cds_loader)
+
         self.difficulty_loader = DifficultyLoader()
         self.init_wandb()
 
@@ -69,11 +75,11 @@ class Validator(BaseValidatorNeuron):
         if self.config.wandb.off:
             return
 
-        run_name = f'validator-{self.uid}-{climate.__version__}'
+        run_name = f'validator-{self.uid}-{zeus.__version__}'
         self.config.run_name = run_name
         self.config.uid = self.uid
         self.config.hotkey = self.wallet.hotkey.ss58_address
-        self.config.version = climate.__version__
+        self.config.version = zeus.__version__
         self.config.type = self.neuron_type
 
         wandb_project = self.config.wandb.project_name if self.config.netuid == MAINNET_UID else self.config.wandb.testnet_project_name

@@ -23,9 +23,9 @@ import typing
 import bittensor as bt
 
 import numpy as np
-from climate.utils.config import get_device_str
-from climate.protocol import TimePredictionSynapse
-from climate.base.miner import BaseMinerNeuron
+from zeus.utils.config import get_device_str
+from zeus.protocol import TimePredictionSynapse
+from zeus.base.miner import BaseMinerNeuron
 
 
 class Miner(BaseMinerNeuron):

@@ -5,8 +5,8 @@ import bittensor as bt
 import numpy as np
 from datetime import datetime
 
-from climate.data.sample import Era5Sample
-from climate.utils.coordinates import get_bbox, slice_bbox
+from zeus.data.sample import Era5Sample
+from zeus.utils.coordinates import get_bbox, slice_bbox
 
 class DifficultyLoader:
 
@@ -44,8 +44,7 @@ class DifficultyLoader:
             ]
         )
 
-        bbox = get_bbox(sample.input_data)
-        difficulty_grid = slice_bbox(difficulty_matrix, bbox)
+        difficulty_grid = slice_bbox(difficulty_matrix, sample.get_bbox())
 
         return difficulty_grid
 
