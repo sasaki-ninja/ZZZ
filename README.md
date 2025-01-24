@@ -8,6 +8,7 @@ Welcome to the Climate Subnet! This repository contains all the necessary inform
 
 ## Quick Links
 - [Mining Guide ⛏️](docs/Mining.md)
+- [Incentive mechanism 🎁](docs/RewardFunction.ipynb)
 - [Validator Guide 🔧](docs/Validating.md)
 
 > [!IMPORTANT]

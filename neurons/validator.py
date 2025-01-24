@@ -28,9 +28,9 @@ from climate.api.proxy import ValidatorProxy
 from climate.base.validator import BaseValidatorNeuron
 from climate.validator.forward import forward
 from climate.data.era5_loader import ERA5DataLoader
+from climate.data.difficulty_loader import DifficultyLoader
 from climate.validator.constants import (
     MAINNET_UID,
-    DIFFICULTIES,
 )
 
 
@@ -51,9 +51,8 @@ class Validator(BaseValidatorNeuron):
         self.validator_proxy = ValidatorProxy(self)
 
         self.data_loader = ERA5DataLoader()
+        self.difficulty_loader = DifficultyLoader()
         self.init_wandb()
-
-        self.difficulties = DIFFICULTIES
 
     async def forward(self):
         """
