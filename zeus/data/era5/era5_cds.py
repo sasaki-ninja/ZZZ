@@ -75,38 +75,33 @@ class Era5CDSLoader(Era5BaseLoader):
     
     def sample_time_range(self) -> Tuple[pd.Timestamp, pd.Timestamp, int]:
         """
-        The idea here is to sample backwards from the current latest stored timestamp.
-        The future hours are therefore NOT included yet (they don't exist yet).
-        We do sample how many future hours we want the miner to predict.
+        Sample random start and end times according to the provided ranges.
         """
         num_predict_hours = np.random.randint(*self.predict_sample_range)
-        num_sample_hours = np.random.randint(*self.time_sample_range)
-        start_timestamp = self.last_stored_timestamp - pd.Timedelta(hours=num_sample_hours)
-        return start_timestamp, self.last_stored_timestamp, num_predict_hours
+
+        biggest_start_offset = self.time_sample_range[1] - self.predict_sample_range[1] # so the prediction start range is 'now' at the latest.
+        start_timestamp = get_today("h") + pd.Timedelta(hours=np.random.randint(self.time_sample_range[0], biggest_start_offset))
+        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
+
+        return start_timestamp, end_timestamp, num_predict_hours
     
     def get_sample(self) -> Era5Sample:
         """
         Get a current sample from the dataset.
 
         Returns:
-        - sample (Era5Sample): The sample containing the input data. Output data is not yet known.
+        - sample (Era5Sample): The sample containing the bounding box and dates. Output data is not yet known.
         """
         lat_start, lat_end, lon_start, lon_end = self.sample_bbox()
         start_time, end_time, predict_hours = self.sample_time_range()
 
-        data = self.get_data(
+        return Era5Sample(
             lat_start=lat_start,
             lat_end=lat_end,
             lon_start=lon_start,
             lon_end=lon_end,
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        return Era5Sample(
             start_timestamp=start_time.timestamp(),
-            end_timestamp=(end_time + pd.Timedelta(hours=predict_hours)).timestamp(),
-            input_data=data,
+            end_timestamp=end_time.timestamp(),
             predict_hours=predict_hours
         )
 

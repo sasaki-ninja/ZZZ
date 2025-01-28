@@ -10,11 +10,10 @@ class Era5Sample:
             self,
             start_timestamp:float,
             end_timestamp: float,
-            lat_start: Optional[float] = None,
-            lat_end: Optional[float] = None,
-            lon_start: Optional[float] = None,
-            lon_end: Optional[float] = None,
-            input_data: Optional[torch.Tensor] = None,
+            lat_start: float,
+            lat_end: float,
+            lon_start: float,
+            lon_end: float,
             output_data: Optional[torch.Tensor] = None,
             predict_hours: Optional[int] = None
     ):
@@ -27,17 +26,13 @@ class Era5Sample:
         self.start_timestamp = start_timestamp
         self.end_timestamp = end_timestamp
 
-        self.lat_start, self.lat_end = lat_start, lat_end
-        self.lon_start, self.lon_end = lon_start, lon_end
+        self.lat_start = lat_start
+        self.lat_end = lat_end
+        self.lon_start = lon_start
+        self.lon_end = lon_end
 
-        self.input_data = input_data 
         self.output_data = output_data
         self.predict_hours = predict_hours
-
-        if input_data is not None:
-            self.lat_start, self.lat_end, self.lon_start, self.lon_end = get_bbox(input_data)
-        elif lat_start is None or lat_end is None or lon_start is None or lon_end is None:
-            raise ValueError("Either input data or lat/lon ranges must be provided.")
 
         if output_data is not None:
             self.predict_hours = output_data.shape[0]
@@ -53,6 +48,8 @@ class Era5Sample:
         Note that the output data is NOT set in this synapse.
         """
         return TimePredictionSynapse(
-            input_data=self.input_data.tolist(), 
-            requested_hours=self.predict_hours,
+            bounding_box=self.get_bbox(),
+            start_time=self.start_timestamp,
+            end_time=self.end_timestamp,
+            requested_hours=self.predict_hours
         )

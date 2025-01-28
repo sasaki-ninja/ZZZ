@@ -13,19 +13,16 @@ COPERNICUS_ERA5_URL: str = "https://cds.climate.copernicus.eu/api"
 
 ERA5_DATA_VARS: List[str] = ["2m_temperature"]
 
-ERA5_DATE_RANGE: Tuple[str, str] = ("1960-01-01", "2024-10-31") # current latest inside that Zarr archive
+ERA5_DATE_RANGE: Tuple[str, str] = ("1960-01-01", "2024-10-31") # current latest inside that Zarr archive - not used currently
 ERA5_LATITUDE_RANGE: Tuple[float, float] = (-90.0, 90.0)
 ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 180.0)
 ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (2, 4) # in degrees, there is 4 measurements per degree.
-ERA5_HOURS_SAMPLE_RANGE: Tuple[int, int] = (72, 120) # in hours
-ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 24) # in hours
+ERA5_HOURS_SAMPLE_RANGE: Tuple[int, int] = (-120, 24) # somewhere between the past five days until one day in the future.
+ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 24) # in hours, how many hours ahead we want to predict.
 
-# Augementation constants
+# Augmentation constants - not used currently
 MIN_INTERPOLATION_DISTORTIONS = 5
 MAX_INTERPOLATION_DISTORTIONS = 50
-
-# Scoring constants
-LIVE_DATA_PROB = 0.1
 
 DIFFICULTY_OFFSET = 0.5
 DIFFICULTY_MULTIPLIER = 1.0

@@ -19,7 +19,7 @@ def get_bbox(tensor: Union[np.ndarray, torch.Tensor]) -> Tuple[float, float, flo
 def slice_bbox(matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float]) -> Union[np.ndarray, torch.Tensor]:
     """
     Slice the matrix to the given lat-lon bounding box. This assumes that the matrix is of shape (180 * fidelity + 1, 360 * fidelity, ...).
-    NOTE: it is also assumed that coordinates are in the range of -90 to 90 for latitude and -180 to 180 for longitude.
+    NOTE: it is also assumed that coordinates are in the range of -90 to 90 for latitude and -180 to 179.75 for longitude.
     """
 
     fidelity = matrix.shape[1] // 360

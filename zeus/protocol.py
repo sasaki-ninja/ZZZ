@@ -22,7 +22,7 @@ import bittensor as bt
 import torch
 
 from pydantic import Field
-from typing import List
+from typing import List, Tuple
 
 
 
@@ -57,10 +57,24 @@ class TimePredictionSynapse(bt.Synapse):
     """
 
     # Required request input, filled by sending dendrite caller.
-    input_data: List[List[List[List[float]]]] = Field(
-        title="Input",
-        description="The numpy tensor to be used as input for enviromental prediction.",
-        default=[],
+    bounding_box: Tuple[float] = Field(
+        title="Bounding box to predict",
+        description="Bounding box in the form of (latitude start, latitude end, longitude start, longitude end). Latitude is -90 to 90, longitude is -180 to 179.75",
+        default=[-90.0, 90.0, -180.0, 179.75],
+        frozen=False,
+    )
+
+    start_time: float = Field(
+        title="start timestamp",
+        description="Starting timestamp in GMT+0 as a float",
+        default=0.0,
+        frozen=False,
+    )
+
+    end_time: float = Field(
+        title="end timestamp",
+        description="Ending timestamp in GMT+0 as a float",
+        default=0.0,
         frozen=False,
     )
 

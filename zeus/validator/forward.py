@@ -26,7 +26,7 @@ import numpy as np
 import torch
 
 from zeus.data.sample import Era5Sample
-from zeus.data.era5.era5_base import Era5BaseLoader
+from zeus.data.era5.era5_cds import Era5CDSLoader
 from zeus.utils.coordinates import get_bbox
 from zeus.validator.reward import get_rewards
 from zeus.utils.uids import get_random_uids
@@ -43,22 +43,16 @@ async def forward(self):
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
-    # based on the block, we decide if we should score old stored predictions
+    # based on the block, we decide if we should score old stored predictions. 
     if self.database.should_score(self.block):
         bt.logging.info(f"Scoring all stored predictions for live ERA5 data.")
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
 
     # Let's sample some data
+    data_loader: Era5CDSLoader = self.cds_loader
     bt.logging.info(f"Sampling data...")
-
-    data_loader: Era5BaseLoader = self.google_loader
-    # check if ready first, to potentially make it sync its cache
-    if self.cds_loader.is_ready() and np.random.rand() < LIVE_DATA_PROB:
-        bt.logging.info("Sampling live data...")
-        data_loader = self.cds_loader
-
-    sample: Era5Sample = data_loader.get_sample()
+    sample = data_loader.get_sample() # does not need data loader to be ready yet - we only select a box and time area.
     bt.logging.success(f"Data sampled. Input shape: {sample.input_data.shape} | Asked to predict {sample.predict_hours} hours ahead.")	
 
     # get some miners
@@ -78,25 +72,19 @@ async def forward(self):
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
 
-    # If send a future sample, we need to store (valid) predictions instead.
-    if sample.output_data is None:
-        good_hotkeys, good_responses = zip(*[(hk, res) for hk, res in zip(miner_hotkeys, responses) if len(res) > 0])
-        # filter out miners that did not respond
-        bad_uids = [uid for uid, response in zip(miner_uids, responses) if len(response) == 0]
+    good_hotkeys, good_responses = zip(*[(hk, res) for hk, res in zip(miner_hotkeys, responses) if len(res) > 0])
+    # filter out miners that did not respond so we can 'score' those right away.
+    bad_uids = [uid for uid, response in zip(miner_uids, responses) if len(response) == 0]
 
-        if len(bad_uids) > 0:
-            bt.logging.success(f"Punishing miners that did not respond immediately.")
-            self.update_scores(np.zeros(len(bad_uids)), bad_uids)
-        
-        if len(good_hotkeys) > 0:
-            bt.logging.success("Storing challenge and miner responses in SQLite database")
-            self.database.insert(sample, good_hotkeys, good_responses)
-    else:
-        # Score miners directly.
-        complete_challenge(self, sample, miner_hotkeys, responses)
-
-    # Introduce a delay to prevent overloading the miner, as excessive requests can sometimes lead to an invalid miner response.
-    time.sleep(5)
+    if len(bad_uids) > 0:
+        bt.logging.success(f"Punishing miners that did not respond immediately.")
+        self.update_scores(np.zeros(len(bad_uids)), bad_uids)
+    
+    if len(good_hotkeys) > 0:
+        bt.logging.success("Storing challenge and miner responses in SQLite database")
+        self.database.insert(sample, good_hotkeys, good_responses)
+    # Introduce a delay to prevent spamming requests
+    time.sleep(60)
 
 
 def complete_challenge(self, sample: Era5Sample, hotkeys: List[str], predictions: List[torch.Tensor]):
