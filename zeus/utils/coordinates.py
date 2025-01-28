@@ -10,10 +10,10 @@ def get_bbox(tensor: Union[np.ndarray, torch.Tensor]) -> Tuple[float, float, flo
     Returns:
     - bbox (Tuple[float, float, float, float]): The bounding box of the tensor: Latitude start, latitude end, longitude start, longitude end.
     """
-    lat_start = tensor[0, 0, 0, 0]
-    lat_end = tensor[0, -1, 0, 0]
-    lon_start = tensor[0, 0, 0, 1]
-    lon_end = tensor[0, 0, -1, 1]
+    lat_start = tensor[0, 0, 0, 0].item()
+    lat_end = tensor[0, -1, 0, 0].item()
+    lon_start = tensor[0, 0, 0, 1].item()
+    lon_end = tensor[0, 0, -1, 1].item()
     return lat_start, lat_end, lon_start, lon_end
 
 def slice_bbox(matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float]) -> Union[np.ndarray, torch.Tensor]:

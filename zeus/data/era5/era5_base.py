@@ -87,8 +87,12 @@ class Era5BaseLoader(ABC):
         subset = self.dataset.sel(
             latitude=slice(lat_start, lat_end), 
             longitude=slice(lon_start, lon_end),
-            time=slice(start_time, end_time)
-        ).chunk()
+        )
+        # CDS NC files don't have time but 'valid_time' instead.
+        if "valid_time" in subset.dims:
+            subset = subset.sel(valid_time=slice(start_time, end_time))
+        else:
+            subset = subset.sel(time=slice(start_time, end_time))
 
         subset = subset.compute() # heavy loading - fetch the actual data here.
 

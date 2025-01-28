@@ -4,7 +4,7 @@ set -a
 source miner.env
 set +a
 
-MINER_PROCESS_NAME="climate_miner"
+MINER_PROCESS_NAME="zeus_miner"
 
 
 if pm2 list | grep -q "$MINER_PROCESS_NAME"; then
@@ -22,4 +22,5 @@ pm2 start neurons/miner.py --name $MINER_PROCESS_NAME -- \
   --blacklist.force_validator_permit $BLACKLIST_FORCE_VALIDATOR_PERMIT \
   --logging.info
 
-#python3 neurons/miner.py --subtensor.chain_endpoint ws://127.0.0.1:9944 --netuid 1 --wallet.name validator --wallet.hotkey miner --axon.port 8080 --logging.info
+# synchronise the process list with the pm2 ecosystem file
+pm2 save

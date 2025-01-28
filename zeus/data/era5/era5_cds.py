@@ -30,11 +30,11 @@ class Era5CDSLoader(Era5BaseLoader):
             cache_dir: Path = ERA5_CACHE_DIR,
             **kwargs,
     ) -> None:
-        self.client = cdsapi.Client(url=COPERNICUS_ERA5_URL, key=validator_config.cds.api_key, quiet=True)
+        self.client = cdsapi.Client(url=COPERNICUS_ERA5_URL, key=validator_config.cds.api_key, quiet=True, progress=False)
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir: Path = cache_dir
-        self.last_stored_timestamp: pd.Timestamp = pd.Timestamp(0, tz="GMT+0")
+        self.last_stored_timestamp: pd.Timestamp = pd.Timestamp(0)
         self.updater_running = False
 
         super().__init__(**kwargs)
@@ -45,7 +45,7 @@ class Era5CDSLoader(Era5BaseLoader):
 
         If not, it will start an async updating process (if it hasn't already started).
         """
-        cut_off = self.get_today("h") - pd.Timedelta(days=self.ERA5_DELAY_DAYS)
+        cut_off = get_today("h") - pd.Timedelta(days=self.ERA5_DELAY_DAYS)
         if self.last_stored_timestamp >= cut_off:
             return True
         
@@ -69,7 +69,8 @@ class Era5CDSLoader(Era5BaseLoader):
             return None
 
         dataset = xr.concat(datasets, "valid_time")
-        self.last_stored_timestamp = pd.Timestamp(dataset.valid_time.max().values, tz="GMT+0")
+        dataset = dataset.sortby("valid_time")
+        self.last_stored_timestamp = pd.Timestamp(dataset.valid_time.max().values)
         return dataset
     
     def sample_time_range(self) -> Tuple[pd.Timestamp, pd.Timestamp, int]:
@@ -110,25 +111,16 @@ class Era5CDSLoader(Era5BaseLoader):
         )
 
     def get_output(self, sample: Era5Sample) -> Optional[torch.Tensor]:
-        if sample.end_timestamp > self.last_stored_timestamp:
+        end_time = get_timestamp(sample.end_timestamp)
+        if end_time > self.last_stored_timestamp:
             return None
         
-        start_time = sample.end_timestamp - pd.Timedelta(hours=sample.get_predict_hours()) + 1
+        start_time = end_time - pd.Timedelta(hours=sample.predict_hours - 1)
         return self.get_data(
             *sample.get_bbox(), 
             start_time=start_time, 
-            end_time=sample.end_timestamp,
+            end_time=end_time,
         )
-    
-    def get_today(self, floor: Optional[str] = None) -> pd.Timestamp:
-        """
-        Copernicus is inside GMT+0, so we can always use that timezone to get the current day.
-        """
-
-        timestamp = pd.Timestamp.now(tz = 'GMT+0')
-        if floor:
-            return timestamp.floor(floor)
-        return timestamp
 
     def get_file_name(self, timestamp: pd.Timestamp) -> str:
         return os.path.join(self.cache_dir, f"era5_{timestamp.strftime('%Y-%m-%d')}.nc")
@@ -154,14 +146,16 @@ class Era5CDSLoader(Era5BaseLoader):
                 "download_format": "unarchived",
             }
             try:
-                self.client.retrieve("reanalysis-era5-single-levels", request, target=self.get_file_name(timestamp))
+                filename = self.get_file_name(timestamp)
+                self.client.retrieve("reanalysis-era5-single-levels", request, target=filename)
+                bt.logging.info(f"Downloaded ERA5 data for {timestamp.strftime('%Y-%m-%d')} to {filename}")
             except Exception as e:
                 # Most errors can occur and should continue, but force validators to authenticate.
                 if isinstance(e, HTTPError) and e.response.status_code == 401:
                     raise ValueError(f"Failed to authenticate with Copernicus API! Please specify an API key from https://cds.climate.copernicus.eu/how-to-api")
 
     async def update_cache(self):
-        current_day = self.get_today("D")
+        current_day = get_today("D")
         tasks = []
         expected_files = set()
 
@@ -174,7 +168,7 @@ class Era5CDSLoader(Era5BaseLoader):
                 tasks.append(self.download_era5_day(timestamp))
 
         await asyncio.gather(*tasks)
-        self.dataset = self.load_dataset()
+        self.dataset = self.preprocess_dataset(self.load_dataset())
 
         if not self.is_ready():
             bt.logging.error("ERROR: ERA5 current cache update failed! This means we cannot send live challenges to miners. If this keeps occuring, please contact us on Discord.")
@@ -187,5 +181,21 @@ class Era5CDSLoader(Era5BaseLoader):
         self.updater_running = False
         
         
+def get_today(floor: Optional[str] = None) -> pd.Timestamp:
+    """
+    Copernicus is inside GMT+0, so we can always use that timezone to get the current day and hour matching theirs.
+    But then remove the timezone information so we can actually compare with the dataset (which is TZ-naive).
+    """
 
+    timestamp = pd.Timestamp.now(tz = 'GMT+0').replace(tzinfo=None)
+    if floor:
+        return timestamp.floor(floor)
+    return timestamp
+
+def get_timestamp(float_timestamp: float) -> pd.Timestamp:
+    """
+    Convert a float timestamp (used for storage) to a pandas timestamp, considering that Copernicus is inside GMT+0.
+    We strip off the timezone information to make it TZ-naive again (but according to Copernicus' time).
+    """
+    return pd.Timestamp(float_timestamp, unit="s", tz='GMT+0').replace(tzinfo=None)
     

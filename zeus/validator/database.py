@@ -28,6 +28,8 @@ class ResponseDatabase:
         This is done roughly hourly, so with one block every 12 seconds this means 
         if the current block is more than 300 blocks ahead of the last synced block, we should score.
         """
+        if not self.cds_loader.is_ready():
+            return False
         if block - self.last_synced_block > 300:
             self.last_synced_block = block
             return True
@@ -80,7 +82,7 @@ class ResponseDatabase:
                 *get_bbox(sample.input_data),
                 sample.start_timestamp,
                 sample.end_timestamp,
-                sample.get_predict_hours()
+                sample.predict_hours,
             ))
             challenge_uid = cursor.lastrowid
             conn.commit()

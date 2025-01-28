@@ -1,9 +1,9 @@
-<h1 align="center">Climate Subnet by Ørpheus A.I. (Bittensor subnet)</h1>
+<h1 align="center">Zeus Subnet by Ørpheus A.I. (Bittensor subnet)</h1>
 
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Welcome to the Climate Subnet! This repository contains all the necessary information to get started, understand our subnet architecture, and contribute.
+Welcome to the Zeus Subnet! This repository contains all the necessary information to get started, understand our subnet architecture, and contribute.
 
 
 ## Quick Links
@@ -17,7 +17,7 @@ Welcome to the Climate Subnet! This repository contains all the necessary inform
 ## Predicting future environmental variables within a decentralized framework
 
 **Overview:**
-The Climate Subnet leverages advanced AI models within the Bittensor network to forecast environmental data. This platform is engineered on a decentralized, incentive-driven framework to enhance trustworthiness and stimulate continuous technological advancement. The datasource for this subnet consists of ERA5 reanalysis data from the Climate Data Store (CDS) of the European Union's Earth observation programme (Copernicus). This comprises the largest global environmental dataset to date, containing hourly measurements from 1940 until the present across a multitude of hundreds of variables. Validators can stream data from this data source in real-time, allowing miners to be queried on terrabytes of data.
+The Zeus Subnet leverages advanced AI models within the Bittensor network to forecast environmental data. This platform is engineered on a decentralized, incentive-driven framework to enhance trustworthiness and stimulate continuous technological advancement. The datasource for this subnet consists of ERA5 reanalysis data from the Climate Data Store (CDS) of the European Union's Earth observation programme (Copernicus). This comprises the largest global environmental dataset to date, containing hourly measurements from 1940 until the present across a multitude of hundreds of variables. Validators can stream data from this data source in real-time, allowing miners to be queried on terrabytes of data.
 
 **Purpose:**
 Traditionally, environmental forecasting is achieved through physics-based numerical weather/environmental prediction (NWP). While this allows for very accurate predictions, it is also highly cost-ineffective, requiring large amounts of computing power for a single forecast. Furthermore, predictions are time expensive to obtain, since the simulation process of these NWP algorithms can take multiple hours to finish. Currently, there is a lot of ongoing research into the development of intelligent, data-driven algorithms for environmental prediction. Such algorithms can potentially be much faster, more accurate, at a fraction of the cost and carbon emissions. This subnet incentives the development of novel and groundbreaking architectures for enviromental data prediction. Through the continious evolution of this subnet, we are able to allow miners to tackle increasingly difficult problems over time.
@@ -37,7 +37,7 @@ Traditionally, environmental forecasting is achieved through physics-based numer
 ![Subnet Architecture](static/Subnet-Arch.png)
 
 ## Community
-For real-time discussions, community support, and regular updates, <a href="">join our Discord server</a>. Connect with developers, researchers, and users to get the most out of the Climate Subnet.
+For real-time discussions, community support, and regular updates, <a href="">join our Discord server</a>. Connect with developers, researchers, and users to get the most out of the Zeus Subnet.
 
 ## License
 This repository is licensed under the MIT License.

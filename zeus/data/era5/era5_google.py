@@ -24,8 +24,8 @@ class ERA5GoogleLoader(Era5BaseLoader):
         **kwargs,
 
     ) -> None:
-        super().__init__(**kwargs)
         self.gcloud_url = gcloud_url
+        super().__init__(**kwargs)
     
     def load_dataset(self) -> xr.Dataset:
         dataset = xr.open_zarr(self.gcloud_url, chunks=None) # don't chunk yet, that takes a lot of time.

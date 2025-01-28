@@ -239,14 +239,14 @@ def add_validator_args(cls, parser):
         "--wandb.project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="climate-subnet",
+        default="zeus-subnet",
     )
 
     parser.add_argument(
         "--wandb.testnet_project_name",
         type=str,
         help="The name of the project where you are sending the new run for testnet.",
-        default="climate-testnet",
+        default="zeus-testnet",
     )
 
     parser.add_argument(

@@ -55,9 +55,10 @@ async def forward(self):
     data_loader: Era5BaseLoader = self.google_loader
     # check if ready first, to potentially make it sync its cache
     if self.cds_loader.is_ready() and np.random.rand() < LIVE_DATA_PROB:
+        bt.logging.info("Sampling live data...")
         data_loader = self.cds_loader
 
-    sample: Era5Sample = data_loader.get_random_sample()
+    sample: Era5Sample = data_loader.get_sample()
     bt.logging.success(f"Data sampled. Input shape: {sample.input_data.shape} | Asked to predict {sample.predict_hours} hours ahead.")	
 
     # get some miners
@@ -77,10 +78,19 @@ async def forward(self):
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
 
-    # If send a future sample, we need to instead store miner predictions!
+    # If send a future sample, we need to store (valid) predictions instead.
     if sample.output_data is None:
-        bt.logging.success("Storing challenge and miner responses in SQLite database")
-        self.database.insert(sample, miner_hotkeys, responses)
+        good_hotkeys, good_responses = zip(*[(hk, res) for hk, res in zip(miner_hotkeys, responses) if len(res) > 0])
+        # filter out miners that did not respond
+        bad_uids = [uid for uid, response in zip(miner_uids, responses) if len(response) == 0]
+
+        if len(bad_uids) > 0:
+            bt.logging.success(f"Punishing miners that did not respond immediately.")
+            self.update_scores(np.zeros(len(bad_uids)), bad_uids)
+        
+        if len(good_hotkeys) > 0:
+            bt.logging.success("Storing challenge and miner responses in SQLite database")
+            self.database.insert(sample, good_hotkeys, good_responses)
     else:
         # Score miners directly.
         complete_challenge(self, sample, miner_hotkeys, responses)
@@ -90,9 +100,8 @@ async def forward(self):
 
 
 def complete_challenge(self, sample: Era5Sample, hotkeys: List[str], predictions: List[torch.Tensor]):
-    # Get the uids of the miners that responded and are still alive
     lookup = {axon.hotkey: uid for uid, axon in enumerate(self.metagraph.axons)}
-
+    # Get the uids of the miners that responded and are still alive
     miner_uids = []
     responses = []
     for hotkey, prediction in zip(hotkeys, predictions):
