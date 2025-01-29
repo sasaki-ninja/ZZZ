@@ -49,8 +49,7 @@ async def forward(self):
         bt.logging.info(f"Scoring all stored predictions for live ERA5 data.")
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
-    return
-
+    
     # Let's sample some data
     data_loader: Era5CDSLoader = self.cds_loader
     bt.logging.info(f"Sampling data...")
