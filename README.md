@@ -1,4 +1,7 @@
-<h1 align="center">Zeus Subnet by Ørpheus A.I. (Bittensor subnet)</h1>
+<p align="center">
+  <img src="static/zeus-icon.png" alt="BitMind Logo" width="150"/>
+</p>
+<h1 align="center">Zeus Environmental Forecasting Subnet<br><small>Ørpheus A.I. & BitMind</small></h1>
 
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)

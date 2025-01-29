@@ -55,7 +55,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 # loading version from setup.py
 with codecs.open(
-    os.path.join(here, "zeus/__init__.py"), encoding="utf-8" # TODO change
+    os.path.join(here, "zeus/__init__.py"), encoding="utf-8"
 ) as init_file:
     version_match = re.search(
         r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
@@ -65,14 +65,14 @@ with codecs.open(
 setup(
     name="Zeus",  # TODO(developer): Change this value to your module subnet name.
     version=version_string,
-    description="Zeus subnet by Orpheus A.I.",  # TODO(developer): Change this value to your module subnet description.
+    description="Zeus subnet by Orpheus A.I. & BitMind", 
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Orpheus-AI/Zeus",  # TODO(developer): Change this url to your module subnet github url.
-    author="orpheus-ai.nl",  # TODO(developer): Change this value to your module subnet author name.
+    url="https://github.com/Orpheus-AI/Zeus", 
+    author="orpheus-ai.nl", 
     packages=find_packages(),
     include_package_data=True,
-    author_email="info@orpheus-ai.nl",  # TODO(developer): Change this value to your module subnet author email.
+    author_email="zeus@orpheus-ai.nl",
     license="MIT",
     python_requires=">=3.8",
     install_requires=requirements,

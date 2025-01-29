@@ -82,7 +82,11 @@ class Era5CDSLoader(Era5BaseLoader):
         num_predict_hours = np.random.randint(*self.predict_sample_range)
 
         # see visualisation in whitepaper for an elaborate explanation: basically make it more likely to sample beginning of time_sample_range
-        start_offset = np.abs(int(np.random.normal(0, ERA5_START_SAMPLE_STD))) + self.min_start_offset_hours
+        start_offset = min(0, # never skip a part of the future
+                            np.abs(
+                                int(np.random.normal(0, ERA5_START_SAMPLE_STD))
+                            ) + self.min_start_offset_hours
+                        )
 
         start_timestamp = get_today("h") + pd.Timedelta(hours=start_offset)
         end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)

@@ -12,8 +12,6 @@
 
 **Ensure you are running Subtensor locally** to minimize outages and improve performance. See [Run a Subtensor Node Locally](https://github.com/opentensor/subtensor/blob/main/docs/running-subtensor-locally.md#compiling-your-own-binary).
 
-**Be aware of the minimum compute requirements** for our subnet, detailed in [Minimum compute YAML configuration](../min_compute.yml). 
-
 ## Installation
 
 Download the repository and navigate to the folder.
@@ -83,7 +81,7 @@ CDS_API_KEY=your_cds_api_key_here
 > [!IMPORTANT]
 > In order to send miners challenges involving the latest ERA5 data, you need to provide a Copernicus CDS API key. These can be obtained from the [following website](https://cds.climate.copernicus.eu/how-to-api). Please first create an account or login, and then scroll down until you see the code-box with 'key' in it on the 'How to API'-page. 
 
-If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord and we can provide one. Without W&B, miners will not be able to see their live scores, 
+If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord. Without W&B, miners will not be able to see their live scores, 
 so we highly recommend enabling this.
 
 Now you're ready to run your validator!
@@ -95,11 +93,13 @@ conda activate climate
 
 ## Requirements
 We strive to make validation as simple as possible on our subnet, aiming to minimise storage and hardware requirements for our validators.
-All data send to miners is streamed live from Google's ERA5 storage, meaning you need **no local data storage** to validate on our subnet! As long as you have enough storage to install our standard Python dependencies (i.e. PyTorch), you can run our entire codebase. 
+Only a couple days of environmental data need to be stored at a time, which will never exceed 1GB. Miner predictions are also temporarily stored in an SQLite database for challenges where the ground-truth is not yet known, which should also not exceed 1GB. As long as you have enough storage to install our standard Python dependencies (i.e. PyTorch), you can likely run our entire codebase!  
 
 Data processing is done locally, but since this has been highly optimised, you will also **not need any GPU** or CUDA support. You will only need a decent CPU machine, where we recommend having at least 8GB of RAM. Since data is loaded over the internet, it is useful to have at least a moderately decent (>3MB/s) internet connection.
 
-You are not required to provide API keys/funds for any external services. We would kindly ask you to link you validator to Weights and Biases, since this helps both miners and outside parties to obtain visualisation of the current state of the subnet. This can be done by specifying your API key in the ``validator.env` file. 
+You are required to provide an API key for the Climate Data Store in order to retrieve data to send to miners, the validator will shut down if this authentication fails. The API-key can be retrieved from the [official CDS website](https://cds.climate.copernicus.eu/how-to-api), after you have created an account at this link as well. Creating an account is **completely free of charge** and only necessary at first launch. Once you have obtained an API key, please enter it in the [validator.env](../validator.env) file. 
+
+We would kindly ask you to link you validator to Weights and Biases, since this helps both miners and outside parties to obtain visualisation of the current state of the subnet. This can be done by specifying your API key in the ``validator.env` file.
 
 > [!TIP]
 > Should you need any assistance with setting up the validator, W&B or anything else, please don't hesitate to reach out to the team at Ørpheus A.I. via Discord!

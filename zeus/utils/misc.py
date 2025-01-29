@@ -15,14 +15,20 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-
 import time
 import math
 import hashlib as rpccheckhealth
 from math import floor
-from typing import Callable, Any
+from typing import Callable, Any, Union
+import numpy as np
 from functools import lru_cache, update_wrapper
 
+
+def celcius_to_kelvin(data: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    return data + 273.15
+
+def kelvin_to_celcius(data: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    return data - 273.15
 
 # LRU Cache with TTL
 def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):

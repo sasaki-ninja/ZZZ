@@ -2,7 +2,7 @@ from typing import List, Tuple
 from pathlib import Path
 
 MAINNET_UID = 1 # TODO change
-TESTNET_UID = 2
+TESTNET_UID = 2 # TODO change
 
 
 # ERA5 data loading constants

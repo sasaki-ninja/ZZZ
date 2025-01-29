@@ -25,6 +25,7 @@ import bittensor as bt
 import openmeteo_requests
 
 import numpy as np
+from zeus.utils.misc import celcius_to_kelvin
 from zeus.utils.config import get_device_str
 from zeus.utils.time import get_timestamp
 from zeus.protocol import TimePredictionSynapse
@@ -82,6 +83,7 @@ class Miner(BaseMinerNeuron):
             [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses],
             axis=1
         ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
+        output = celcius_to_kelvin(output) # OpenMeteo does Celcius, scoring is based on Kelvin
 
         # OpenMeteo always does full days, so slice off any hours that weren't part of the range.
         output = output[start_time.hour: (-24 + end_time.hour)]
