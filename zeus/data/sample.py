@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 import torch
 
-from zeus.utils.coordinates import get_bbox
+from zeus.utils.coordinates import get_bbox, get_grid
 from zeus.protocol import TimePredictionSynapse
 
 class Era5Sample:
@@ -10,10 +10,11 @@ class Era5Sample:
             self,
             start_timestamp:float,
             end_timestamp: float,
-            lat_start: float,
-            lat_end: float,
-            lon_start: float,
-            lon_end: float,
+            x_grid: Optional[torch.Tensor] = None,
+            lat_start: Optional[float] = None,
+            lat_end: Optional[float] = None,
+            lon_start: Optional[float] = None,
+            lon_end: Optional[float] = None,
             output_data: Optional[torch.Tensor] = None,
             predict_hours: Optional[int] = None
     ):
@@ -26,6 +27,8 @@ class Era5Sample:
         self.start_timestamp = start_timestamp
         self.end_timestamp = end_timestamp
 
+        self.x_grid = x_grid
+
         self.lat_start = lat_start
         self.lat_end = lat_end
         self.lon_start = lon_start
@@ -33,6 +36,13 @@ class Era5Sample:
 
         self.output_data = output_data
         self.predict_hours = predict_hours
+
+        if x_grid is not None:
+            self.lat_start, self.lat_end, self.lon_start, self.lon_end = get_bbox(x_grid)
+        elif lat_start is not None and lat_end is not None and lon_start is not None and lon_end is not None:
+            self.x_grid = get_grid(lat_start, lat_end, lon_start, lon_end)
+        else:
+            raise ValueError("Either input grid or lat/lon ranges must be provided.")
 
         if output_data is not None:
             self.predict_hours = output_data.shape[0]
@@ -48,7 +58,7 @@ class Era5Sample:
         Note that the output data is NOT set in this synapse.
         """
         return TimePredictionSynapse(
-            bounding_box=self.get_bbox(),
+            locations=self.x_grid.tolist(),
             start_time=self.start_timestamp,
             end_time=self.end_timestamp,
             requested_hours=self.predict_hours

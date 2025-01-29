@@ -14,9 +14,11 @@ import bittensor as bt
 
 from zeus.data.era5.era5_base import Era5BaseLoader
 from zeus.data.sample import Era5Sample
+from zeus.utils.time import get_today, get_timestamp
 from zeus.validator.constants import (
     ERA5_CACHE_DIR,
     COPERNICUS_ERA5_URL,
+    ERA5_START_SAMPLE_STD,
 )
 
 
@@ -79,8 +81,10 @@ class Era5CDSLoader(Era5BaseLoader):
         """
         num_predict_hours = np.random.randint(*self.predict_sample_range)
 
-        biggest_start_offset = self.time_sample_range[1] - self.predict_sample_range[1] # so the prediction start range is 'now' at the latest.
-        start_timestamp = get_today("h") + pd.Timedelta(hours=np.random.randint(self.time_sample_range[0], biggest_start_offset))
+        # see visualisation in whitepaper for an elaborate explanation: basically make it more likely to sample beginning of time_sample_range
+        start_offset = np.abs(int(np.random.normal(0, ERA5_START_SAMPLE_STD))) + self.min_start_offset_hours
+
+        start_timestamp = get_today("h") + pd.Timedelta(hours=start_offset)
         end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
 
         return start_timestamp, end_timestamp, num_predict_hours
@@ -111,11 +115,13 @@ class Era5CDSLoader(Era5BaseLoader):
             return None
         
         start_time = end_time - pd.Timedelta(hours=sample.predict_hours - 1)
-        return self.get_data(
+        data4d: torch.Tensor = self.get_data(
             *sample.get_bbox(), 
             start_time=start_time, 
             end_time=end_time,
         )
+        # Slice off the latitude and longitude for the output
+        return data4d[..., 2:].squeeze(dim=-1)
 
     def get_file_name(self, timestamp: pd.Timestamp) -> str:
         return os.path.join(self.cache_dir, f"era5_{timestamp.strftime('%Y-%m-%d')}.nc")
@@ -154,7 +160,7 @@ class Era5CDSLoader(Era5BaseLoader):
         tasks = []
         expected_files = set()
 
-        for days_ago in range(self.ERA5_DELAY_DAYS, self.ERA5_DELAY_DAYS + math.floor(self.time_sample_range[1] / 24) + 1):
+        for days_ago in range(self.ERA5_DELAY_DAYS, self.ERA5_DELAY_DAYS + math.ceil(self.predict_sample_range[1] / 24) + 1):
             timestamp = current_day - pd.Timedelta(days=days_ago)
             filename = self.get_file_name(timestamp)
             expected_files.add(filename)
@@ -174,23 +180,3 @@ class Era5CDSLoader(Era5BaseLoader):
                 os.remove(file)
 
         self.updater_running = False
-        
-        
-def get_today(floor: Optional[str] = None) -> pd.Timestamp:
-    """
-    Copernicus is inside GMT+0, so we can always use that timezone to get the current day and hour matching theirs.
-    But then remove the timezone information so we can actually compare with the dataset (which is TZ-naive).
-    """
-
-    timestamp = pd.Timestamp.now(tz = 'GMT+0').replace(tzinfo=None)
-    if floor:
-        return timestamp.floor(floor)
-    return timestamp
-
-def get_timestamp(float_timestamp: float) -> pd.Timestamp:
-    """
-    Convert a float timestamp (used for storage) to a pandas timestamp, considering that Copernicus is inside GMT+0.
-    We strip off the timezone information to make it TZ-naive again (but according to Copernicus' time).
-    """
-    return pd.Timestamp(float_timestamp, unit="s", tz='GMT+0').replace(tzinfo=None)
-    

@@ -79,7 +79,7 @@ class ResponseDatabase:
                 INSERT INTO challenges (lat_start, lat_end, lon_start, lon_end, start_timestamp, end_timestamp, hours_to_predict)
                 VALUES (?, ?, ?, ?, ?, ?, ?);
                 ''', (
-                *get_bbox(sample.input_data),
+                *sample.get_bbox(),
                 sample.start_timestamp,
                 sample.end_timestamp,
                 sample.predict_hours,

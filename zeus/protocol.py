@@ -57,10 +57,10 @@ class TimePredictionSynapse(bt.Synapse):
     """
 
     # Required request input, filled by sending dendrite caller.
-    bounding_box: Tuple[float] = Field(
-        title="Bounding box to predict",
-        description="Bounding box in the form of (latitude start, latitude end, longitude start, longitude end). Latitude is -90 to 90, longitude is -180 to 179.75",
-        default=[-90.0, 90.0, -180.0, 179.75],
+    locations: List[List[Tuple[float, float]]] = Field(
+        title="Locations to predict",
+        description="Locations to predict. Represents a grid of (latitude, longitude) pairs.",
+        default=[],
         frozen=False,
     )
 

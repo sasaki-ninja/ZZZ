@@ -16,7 +16,8 @@ import base64
 from zeus.utils.uids import get_random_uids
 from zeus.validator.reward import help_format_miner_output, compute_penalty
 from zeus.protocol import TimePredictionSynapse
-from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.utils.time import get_timestamp
+from zeus.utils.coordinates import get_grid
 
 class ValidatorProxy:
     def __init__(
@@ -104,7 +105,7 @@ class ValidatorProxy:
         authorization: str = request.headers.get("authorization")
         if not authorization:
             raise HTTPException(status_code=401, detail="Authorization header missing")
-        #self.authenticate_token(authorization)
+        #self.authenticate_token(authorization) # TODO
 
         bt.logging.info("[PROXY] Received an organic request!")
         # Finding some miners
@@ -117,20 +118,15 @@ class ValidatorProxy:
         # catch errors to prevent log spam if API is missused
         try:
             payload = await request.json()
-            sample_hours = payload["sample_hours"]
-
-            cds_loader: Era5CDSLoader = self.validator.cds_loader
-            start_timestamp = cds_loader.last_stored_timestamp - pd.Timedelta(hours=sample_hours)
-
-            data = cds_loader.get_data(
-                lat_start=payload['lat_start'],
-                lat_end=payload['lat_end'],
-                lon_start=payload['lon_start'],
-                lon_end=payload['lon_end'],
-                start_time=start_timestamp,
-                end_time=cds_loader.last_stored_timestamp
-            )
+           
+            grid = get_grid(payload['lat_start'], payload['lat_end'], payload['lon_start'], payload['lon_end'])
             predict_hours = payload["predict_hours"]
+            synapse = TimePredictionSynapse(
+                locations=grid.tolist(), 
+                start_time=payload['start_timestamp'], 
+                end_time=payload['end_timestamp'],
+                requested_hours=predict_hours
+            )
 
         except Exception as e:
             bt.logging.info(f"[PROXY] Organic request was invalid.")
@@ -141,13 +137,13 @@ class ValidatorProxy:
         bt.logging.info(f"[PROXY] Querying {len(miner_uids)} miners...")
         predictions = await self.dendrite(
             axons=[metagraph.axons[uid] for uid in miner_uids],
-    	    synapse=TimePredictionSynapse(input_data=data, requested_hours=predict_hours),
+    	    synapse=synapse,
             deserialize=True,
             timeout=10
         )
 
         # validating predictions and returning them
-        dummy_output = torch.zeros(predict_hours, data.shape[1], data.shape[2])
+        dummy_output = torch.zeros(predict_hours, grid.shape[0], grid.shape[1])
         for prediction, uid in zip(predictions, miner_uids):
             prediction = help_format_miner_output(dummy_output, prediction)
             penalty = compute_penalty(dummy_output, prediction)

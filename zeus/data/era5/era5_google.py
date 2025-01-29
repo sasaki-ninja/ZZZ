@@ -17,6 +17,11 @@ from zeus.validator.constants import (
 
 
 class ERA5GoogleLoader(Era5BaseLoader):
+    """
+    A dataloader based on historical data from the ERA5 dataset stored on Google Cloud.
+    Currently this dataset is NOT USED, as it would be too easy to lookup the correct answer for miners.
+    The dataloader is provided mostly for reference, and a modified version might be implemented into the subnet in the future.
+    """
 
     def __init__(
         self,
@@ -34,36 +39,34 @@ class ERA5GoogleLoader(Era5BaseLoader):
 
     def sample_time_range(self) -> Tuple[pd.Timestamp, pd.Timestamp, int]:
         """
-        Sample a random time range from the dataset in the form of "Y-m-d" strings and a number of hours to predict.
+        Sample a random time range from the dataset in the form of pandas datetimes and a number of hours to predict.
         The start will always be the start of day,
         but the end could be any hour on a day after start.
-        The hours to be predicted are also included in this range, but are not send to the miner.
 
         Returns:
          - start_timestamp (pd.Timestamp): The start of the time range.
          - end_timestamp (pd.Timestamp): The end of the time range.
-         - num_predict_hours (int): The number of hours to be predicted.
+         - num_predict_hours (int): The number of hours to be predicted (difference between start and end).
         """
         latest_day = (
             (self.date_range[1] - self.date_range[0]).days 
-            - math.floor(self.time_sample_range[1] / 24) 
             - math.floor(self.predict_sample_range[1] / 24)
         )
-        start_timestamp = pd.to_timedelta(np.random.randint(0, latest_day), unit="D") + self.date_range[0]
+        start_timestamp = self.date_range[0] + pd.Timedelta(days=np.random.randint(0, latest_day))
         num_predict_hours = np.random.randint(*self.predict_sample_range)
-        end_timestamp = pd.to_timedelta(np.random.randint(*self.time_sample_range) + num_predict_hours, unit="h") + start_timestamp
+        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
         return start_timestamp, end_timestamp, num_predict_hours
     
     def get_sample(self) -> Era5Sample:
         """
-        Get a random sample from the dataset. This sample includes a tiny bit of noise on the input to prevent hashing lookups.
+        Get a random sample from the dataset.
 
         Returns:
         - sample (Era5Sample): The sample containing the input and output data.
         """
         # get a random rectangular bounding box
         lat_start, lat_end, lon_start, lon_end = self.sample_bbox()
-        start_time, end_time, predict_hours = self.sample_time_range()
+        start_time, end_time, _ = self.sample_time_range()
 
         data = self.get_data(
             lat_start=lat_start,
@@ -74,22 +77,14 @@ class ERA5GoogleLoader(Era5BaseLoader):
             end_time=end_time
         )
 
-        input_data = data[:-predict_hours]
-        output_data = data[-predict_hours:]
-
-        num_distortions = np.random.randint(MIN_INTERPOLATION_DISTORTIONS, MAX_INTERPOLATION_DISTORTIONS)
-        input_data = interp_distort(input_data, num_distortions)
-        # Add noise only to the the variables data
-        noise = torch.randn(*input_data.shape[:-1], input_data.shape[-1] - 2) * self.noise_factor
-        input_data[..., -1:] += noise
-
+        x_grid = data[0, ..., :2]
         # Slice off the latitude and longitude for the output
-        output_data = output_data[..., 2:].squeeze()
+        output_data = data[..., 2:].squeeze()
 
         return Era5Sample(
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
-            input_data=input_data,
+            x_grid=x_grid,
             output_data=output_data
         )
     

@@ -20,7 +20,7 @@ from typing import List, Tuple, Dict
 import numpy as np
 import torch
 import bittensor as bt
-from zeus.data.sample import Era5Sample
+from zeus.validator.miner_data import MinerData
 from zeus.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
 
 def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> torch.Tensor:
@@ -68,9 +68,9 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
 
 def get_rewards(
     output_data: torch.Tensor,
-    responses: List[torch.Tensor],
+    miners_data: List[MinerData],
     difficulty_grid: np.ndarray,
-) -> Tuple[np.ndarray, List[Dict[str, float]]]:
+) -> List[MinerData]:
     """
     Returns an array of rewards for the given query and responses.
 
@@ -83,38 +83,34 @@ def get_rewards(
     - np.ndarray: An array of rewards for the given query and responses.
     - List[Dict[str, float]]: A list of metrics and scores for each miner as a dictionary.
     """
-    miner_rewards = []
-    miner_metrics = []
 
     # based on historical time-derivate of variance we have calculated a difficulty per coordinate
     # with some offset (the mean difficulty) and multiplier
     z_score_grid = difficulty_grid * DIFFICULTY_MULTIPLIER + DIFFICULTY_OFFSET
 
-    for response in responses:
+    for miner_data in miners_data:
         RMSE = -1.0 # default values if penalty occurs
         score = 0.0
 
-        response = help_format_miner_output(output_data, response)
-        penalty = compute_penalty(output_data, response)
+        prediction = help_format_miner_output(output_data, miner_data.prediction)
+        penalty = compute_penalty(output_data, prediction)
 
         # only score if no penalty
         if penalty == 0.0:
             RMSE = (
                 (
-                    (response - output_data) / z_score_grid
+                    (prediction - output_data) / z_score_grid
                 ) ** 2
             ).mean().sqrt()
              # Miners should get the lowest MSE.
             score = max(0.0, 1.0 - RMSE)
-        
-        miner_rewards.append(score)
-        miner_metrics.append(
-            {
-                "penalty": penalty,
-                "RMSE": RMSE, 
-                "avg_difficulty": difficulty_grid.mean(),
-                "score": score
-             }
-        )
+
+        miner_data.reward = score
+        miner_data.metrics = {
+            "penalty": penalty,
+            "RMSE": RMSE,
+            "avg_difficulty": difficulty_grid.mean(),
+            "score": score,
+        }
  
-    return np.array(miner_rewards), miner_metrics
+    return miners_data

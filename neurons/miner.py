@@ -22,8 +22,11 @@ import torch
 import typing
 import bittensor as bt
 
+import openmeteo_requests
+
 import numpy as np
 from zeus.utils.config import get_device_str
+from zeus.utils.time import get_timestamp
 from zeus.protocol import TimePredictionSynapse
 from zeus.base.miner import BaseMinerNeuron
 
@@ -33,6 +36,9 @@ class Miner(BaseMinerNeuron):
     Your miner neuron class. You should use this class to define your miner's behavior. 
     In particular, you should replace the forward function with your own logic. 
     You may also want to override the blacklist and priority functions according to your needs.
+
+    Currently the miner simply does a request to OpenMeteo (https://open-meteo.com/) asking for a prediction.
+    You are encouraged to attempt to improve over this by changing the forward function.
     """
 
     def __init__(self, config=None):
@@ -40,12 +46,13 @@ class Miner(BaseMinerNeuron):
 
         self.device: torch.device = torch.device(get_device_str())
         # TODO(miner): Anything specific to your use case you can do here
+        self.openmeteo_api = openmeteo_requests.Client()
 
     async def forward(
         self, synapse: TimePredictionSynapse
     ) -> TimePredictionSynapse:
         """
-        Processes the incoming TimePredictionSynapse by performing a predefined operation on the input data.
+        Processes the incoming TimePredictionSynapse by performing a predefined operation on the input.
 
         Args:
             synapse (TimePredictionSynapse): The synapse object containing the input data.
@@ -53,17 +60,33 @@ class Miner(BaseMinerNeuron):
         Returns:
             TimePredictionSynapse: The synapse object with the 'predictions' field set".
         """
-        # shape (hours, lat, lon, vars), where vars=(lat, lon, temperature)
-        input_data: torch.Tensor = torch.tensor(synapse.input_data)
-        num_requested_hours: int = synapse.requested_hours
-        bt.logging.info(f"We are receiving input of shape {input_data.shape} and we are requested to predict {num_requested_hours} hours.")
+        # shape (lat, lon, 2) so a grid of locations
+        coordinates = torch.Tensor(synapse.locations)
+        start_time = get_timestamp(synapse.start_time)
+        end_time = get_timestamp(synapse.end_time)
+        bt.logging.info(f"We are receiving input of grid shape {coordinates.shape} and we are requested to predict {synapse.requested_hours} hours.")
 
-        # TODO (miner) you might want to do something more intelligent than taking the mean over all time points:)
-        input_temperature_only = input_data[..., 2:].squeeze()
-        output = input_temperature_only.mean(dim=0)
-        output = output.expand(num_requested_hours, *output.shape)
         ##########################################################################################################
+        # TODO (miner) you likely want to improve over this baseline of calling OpenMeteo by changing this section
+        latitudes, longitudes = coordinates.view(-1, 2).T
+        params = {
+            "latitude": latitudes.tolist(),
+            "longitude": longitudes.tolist(),
+            "hourly": "temperature_2m",
+            "start_date": start_time.strftime("%Y-%m-%d"),
+            "end_date": end_time.strftime("%Y-%m-%d"),
+        }
+        responses = self.openmeteo_api.weather_api("https://api.open-meteo.com/v1/forecast", params=params)
+        # get temperature output as grid of [time, lat, lon]
+        output = np.stack(
+            [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses],
+            axis=1
+        ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
 
+        # OpenMeteo always does full days, so slice off any hours that weren't part of the range.
+        output = output[start_time.hour: (-24 + end_time.hour)]
+        ##########################################################################################################
+        bt.logging.info(f"Output shape is {output.shape}")
         synapse.predictions = output.tolist()
         return synapse
 

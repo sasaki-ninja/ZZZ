@@ -12,7 +12,7 @@ from zeus.validator.constants import (
     ERA5_LONGITUDE_RANGE,
     ERA5_DATE_RANGE,
     ERA5_AREA_SAMPLE_RANGE,
-    ERA5_HOURS_SAMPLE_RANGE,
+    ERA5_OLDEST_START_HOUR,
     ERA5_HOURS_PREDICT_RANGE,
 )
 
@@ -25,7 +25,7 @@ class Era5BaseLoader(ABC):
         lon_range: Tuple[float, float] = ERA5_LONGITUDE_RANGE,
         date_range: Tuple[str, str] = ERA5_DATE_RANGE,
         area_sample_range: Tuple[float, float] = ERA5_AREA_SAMPLE_RANGE, # in degrees, there is 4 measurements per degree.
-        time_sample_range: Tuple[int, int] = ERA5_HOURS_SAMPLE_RANGE,
+        min_start_offset_hours: int = ERA5_OLDEST_START_HOUR,
         predict_sample_range: Tuple[float, float] = ERA5_HOURS_PREDICT_RANGE,
         noise_factor: float = 1e-3,
 
@@ -38,7 +38,7 @@ class Era5BaseLoader(ABC):
         self.date_range = list(map(pd.to_datetime, sorted(date_range)))
 
         self.area_sample_range = sorted(area_sample_range)
-        self.time_sample_range = sorted(time_sample_range)
+        self.min_start_offset_hours = min_start_offset_hours
         self.predict_sample_range = sorted(predict_sample_range)
 
         self.dataset = self.preprocess_dataset(self.load_dataset())
@@ -59,13 +59,18 @@ class Era5BaseLoader(ABC):
             dataset = dataset.assign_coords(latitude=dataset["latitude"].values - 90)
 
         dataset = dataset.sortby(["latitude", "longitude"])
+        dataset = dataset.sel(latitude=slice(*self.lat_range), longitude=slice(*self.lon_range))
         return dataset
 
     def sample_bbox(self) -> Tuple[float, float, float, float]:
-        lat_start = np.random.uniform(self.lat_range[0], self.lat_range[1] - self.area_sample_range[1])
-        lat_end = lat_start + np.random.uniform(*self.area_sample_range)
-        lon_start = np.random.uniform(self.lon_range[0], self.lon_range[1] - self.area_sample_range[1])
-        lon_end = lon_start + np.random.uniform(*self.area_sample_range)
+        # make sure the lat and lon samples are exact coordinates of a point in the dataset.
+        start_idx_lat = np.random.randint(0, len(self.dataset.latitude) - self.area_sample_range[1])
+        lat_start = self.dataset.latitude.values[start_idx_lat]
+        lat_end = self.dataset.latitude.values[start_idx_lat + np.random.randint(*self.area_sample_range)]
+
+        start_idx_lon = np.random.randint(0, len(self.dataset.longitude) - self.area_sample_range[1])
+        lon_start = self.dataset.longitude.values[start_idx_lon]
+        lon_end = self.dataset.longitude.values[start_idx_lon + np.random.randint(*self.area_sample_range)]
         return lat_start, lat_end, lon_start, lon_end
     
     def get_data(

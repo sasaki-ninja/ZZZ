@@ -17,7 +17,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from typing import List
+from typing import List, Optional, Tuple
 from functools import partial
 import time
 import bittensor as bt
@@ -27,10 +27,11 @@ import torch
 
 from zeus.data.sample import Era5Sample
 from zeus.data.era5.era5_cds import Era5CDSLoader
-from zeus.utils.coordinates import get_bbox
+from zeus.utils.time import timestamp_to_str
+from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import get_rewards
+from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
-from zeus.validator.constants import LIVE_DATA_PROB
 
 
 async def forward(self):
@@ -48,12 +49,14 @@ async def forward(self):
         bt.logging.info(f"Scoring all stored predictions for live ERA5 data.")
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
+    return
 
     # Let's sample some data
     data_loader: Era5CDSLoader = self.cds_loader
     bt.logging.info(f"Sampling data...")
     sample = data_loader.get_sample() # does not need data loader to be ready yet - we only select a box and time area.
-    bt.logging.success(f"Data sampled. Input shape: {sample.input_data.shape} | Asked to predict {sample.predict_hours} hours ahead.")	
+    bt.logging.success(f"Data sampled with bounding box {bbox_to_str(sample.get_bbox())}")
+    bt.logging.success(f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead.")	
 
     # get some miners
     miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
@@ -72,54 +75,72 @@ async def forward(self):
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
 
-    good_hotkeys, good_responses = zip(*[(hk, res) for hk, res in zip(miner_hotkeys, responses) if len(res) > 0])
-    # filter out miners that did not respond so we can 'score' those right away.
-    bad_uids = [uid for uid, response in zip(miner_uids, responses) if len(response) == 0]
-
-    if len(bad_uids) > 0:
-        bt.logging.success(f"Punishing miners that did not respond immediately.")
-        self.update_scores(np.zeros(len(bad_uids)), bad_uids)
+    # set some dummy output so we can check for penalties
+    sample.output_data = torch.zeros(sample.predict_hours, sample.x_grid.shape[0], sample.x_grid.shape[1])
+    # score miners that get a penalty, and get back the actual good predictions
+    good_miners = complete_challenge(self, sample, miner_hotkeys, responses, for_penalty=True)
     
-    if len(good_hotkeys) > 0:
-        bt.logging.success("Storing challenge and miner responses in SQLite database")
-        self.database.insert(sample, good_hotkeys, good_responses)
-    # Introduce a delay to prevent spamming requests
-    time.sleep(60)
+    if len(good_miners) > 0:
+        bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
+        self.database.insert(sample, [miner.hotkey for miner in good_miners], [miner.prediction for miner in good_miners])
+    # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
+    time.sleep(120)
 
 
-def complete_challenge(self, sample: Era5Sample, hotkeys: List[str], predictions: List[torch.Tensor]):
+def complete_challenge(
+        self, 
+        sample: Era5Sample, 
+        hotkeys: List[str], 
+        predictions: List[torch.Tensor], 
+        for_penalty: bool = False
+) -> Optional[List[MinerData]]:
+    """
+    Handle miner responses. Based on hotkeys to also work for delayed rewarding.
+    If for_penalty is True, we only score miners that received a penalty (i.e. wrong shape/no response).
+    This penalty can be calculated without knowning the actual output yet.
+    If for_penalty is True, we return MinerData for each miner that did NOT receive a penalty, as these need to be scored.
+    """
+    
     lookup = {axon.hotkey: uid for uid, axon in enumerate(self.metagraph.axons)}
-    # Get the uids of the miners that responded and are still alive
-    miner_uids = []
-    responses = []
+
+    # Make miner data for each miner that is still alive
+    miners_data = []
     for hotkey, prediction in zip(hotkeys, predictions):
         uid = lookup.get(hotkey, None)
         if uid is not None:
-            miner_uids.append(uid)
-            responses.append(prediction)
+            miners_data.append(MinerData(uid=uid, hotkey=hotkey, prediction=prediction))
 
     # score and reward just those miners
-    rewards, metrics = get_rewards(
+    miners_data = get_rewards(
         output_data=sample.output_data,
-        responses=responses, # miner responses
+        miners_data=miners_data,
         difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
         )
-    self.update_scores(rewards, miner_uids)
+        
+    # filter out only the miners that got a penalty.
+    final_miners_data = miners_data
+    if for_penalty:
+        final_miners_data = [miner for miner in miners_data if miner.metrics["penalty"] > 0.0]
+        if len(final_miners_data) > 0:
+            bt.logging.success(f"Punishing miners that did not respond immediately.")
 
+    self.update_scores([miner.reward for miner in final_miners_data], [miner.uid for miner in final_miners_data])
+
+    # print interesting miner predictions and store best miners for the Proxy
     miners_scores = {}
-    for uid, response, reward in zip(miner_uids, responses, rewards):
-        if len(response) != 0:
-            miners_scores[uid] = reward
-            bt.logging.success(f"UID: {uid} | Predicted shape: {response.shape} | Reward: {reward}")
-    # store best miners for the Proxy
+    for miner in final_miners_data:
+        if len(miner.prediction) != 0:
+            miners_scores[uid] = miner.reward
+            bt.logging.success(f"UID: {uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}")
     self.last_responding_miner_uids = sorted(miners_scores, key=miners_scores.get, reverse=True)
 
+    # do W&B logging
     if not self.config.wandb.off:
-        for miner_uid, metric_dict in zip(miner_uids, metrics):
+        for miner in final_miners_data:
             wandb.log(
                 {
-                    f"miner_{miner_uid}_{key}": val 
-                    for key, val in metric_dict.items()
+                    f"miner_{miner.uid}_{key}": val 
+                    for key, val in miner.metrics.items()
                 },
                 commit=False # All logging should be the same commit
             )
@@ -132,3 +153,7 @@ def complete_challenge(self, sample: Era5Sample, hotkeys: List[str], predictions
                 "lat_lon_bbox": sample.get_bbox(),
             },
         )
+    
+    # optionally return miners that should be stored if we were doing penalty
+    if for_penalty:
+        return [miner for miner in miners_data if miner not in final_miners_data]
