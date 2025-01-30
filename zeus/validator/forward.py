@@ -74,9 +74,9 @@ async def forward(self):
 
     bt.logging.success(f"Responses received in {time.time() - start}s")
 
-    # set some dummy output so we can check for penalties
+    # Create a dummy output with the same shape as the sample's prediction grid to check for penalties
     sample.output_data = torch.zeros(sample.predict_hours, sample.x_grid.shape[0], sample.x_grid.shape[1])
-    # score miners that get a penalty, and get back the actual good predictions
+    # Identify miners who should receive a penalty and return the actual good predictions
     good_miners = complete_challenge(self, sample, miner_hotkeys, responses, for_penalty=True)
     
     if len(good_miners) > 0:
