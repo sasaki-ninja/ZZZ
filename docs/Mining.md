@@ -59,7 +59,7 @@ btcli s register --netuid [net_uid] --wallet.name [wallet_name] --wallet.hotkey 
 #### Testnet
 
 ```bash
-btcli s register --netuid [testnet_uid] --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network test
+btcli s register --netuid 301 --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network test
 ```
 
 ## Setup
@@ -69,8 +69,8 @@ You can use the sample below as a starting point, but make sure to replace **wal
 
 ```bash
 # Subtensor Network Configuration:
-NETUID=                                        # Network User ID options: ?,?
-SUBTENSOR_NETWORK=finney                       # Networks: finney, test, local
+NETUID=301                                     # Network User ID options: ?,301
+SUBTENSOR_NETWORK=                             # Networks: finney, test, local
 SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
                                                # Endpoints:
                                                # - wss://entrypoint-finney.opentensor.ai:443
