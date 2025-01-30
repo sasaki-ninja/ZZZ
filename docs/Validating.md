@@ -48,7 +48,7 @@ btcli s register --netuid [net_uid] --wallet.name [wallet_name] --wallet.hotkey 
 #### Testnet
 
 ```bash
-btcli s register --netuid [testnet_uid] --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network test
+btcli s register --netuid 301 --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network test
 ```
 
 
@@ -57,8 +57,8 @@ Before launching your validator, make sure to create a file called `validator.en
 You can use the sample below as a starting point, but make sure to replace **wallet_name**, **wallet_hotkey**, **axon_port**, **wandb_api_key** and **cds_api_key**.
 
 ```bash
-NETUID=                                        # Network User ID options: ?,?
-SUBTENSOR_NETWORK=finney                       # Networks: finney, test, local
+NETUID=                                        # Network User ID options: ?,301
+SUBTENSOR_NETWORK=                             # Networks: finney, test, local
 SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
                                                 # Endpoints:
                                                 # - wss://entrypoint-finney.opentensor.ai:443
