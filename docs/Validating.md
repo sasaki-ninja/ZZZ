@@ -57,7 +57,7 @@ Before launching your validator, make sure to create a file called `validator.en
 You can use the sample below as a starting point, but make sure to replace **wallet_name**, **wallet_hotkey**, **axon_port**, **wandb_api_key** and **cds_api_key**.
 
 ```bash
-NETUID=34                                      # Network User ID options: 34, 168
+NETUID=                                        # Network User ID options: ?,?
 SUBTENSOR_NETWORK=finney                       # Networks: finney, test, local
 SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
                                                 # Endpoints:
