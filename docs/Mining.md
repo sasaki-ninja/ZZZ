@@ -69,7 +69,7 @@ You can use the sample below as a starting point, but make sure to replace **wal
 
 ```bash
 # Subtensor Network Configuration:
-NETUID=TODO                                      # Network User ID options: 34, 168
+NETUID=                                        # Network User ID options: ?,?
 SUBTENSOR_NETWORK=finney                       # Networks: finney, test, local
 SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
                                                # Endpoints:
