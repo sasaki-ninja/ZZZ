@@ -3,7 +3,6 @@
 ## Table of Contents
 
 1. [Installation 🔧](#installation)
-   - [Data 📊](#data)
    - [Registration ✍️](#registration)
 2. [Validating ✅](#validating)
 3. [Requirements 💻](#requirements)
