@@ -27,7 +27,6 @@ Traditionally, environmental forecasting is achieved through physics-based numer
 
 **Features:**
 
-- **Applications:**
 - **Model Evolution:** Our platform continuously integrates the latest research and developments in AI to adapt to evolving generative techniques.
 
 **Core Components:**
