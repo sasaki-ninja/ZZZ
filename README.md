@@ -35,11 +35,9 @@ Traditionally, environmental forecasting is achieved through physics-based numer
   - **Research Integration:** We systematically update our detection models and methodologies in response to emerging academic research. Through the global ERA5 dataset, we are able to provide validators and miners with near infinite amounts of environmental data, which can also be used for training their models. All data is publicly available to everyone.
 - **Validators:** Responsible for challenging miners with a subsets of environmental data and evaluating miner performance on heldout data.
   - **Resource Expansion:** We continuously add new enviromental challenges and data modalities to our subnet in order to evolve our subnet and solve a multitude of distinct problems.
-**Subnet Architecture Diagram**
-![Subnet Architecture](static/Subnet-Arch.png)
 
 ## Community
-For real-time discussions, community support, and regular updates, <a href="">join our Discord server</a>. Connect with developers, researchers, and users to get the most out of the Zeus Subnet.
+For real-time discussions, community support, and regular updates, <a href="https://discord.com/invite/bittensor">join the bittensor discord</a>. Connect with developers, researchers, and users to get the most out of the Zeus Subnet.
 
 ## License
 This repository is licensed under the MIT License.
