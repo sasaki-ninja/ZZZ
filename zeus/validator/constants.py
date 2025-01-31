@@ -2,7 +2,7 @@ from typing import List, Tuple
 from pathlib import Path
 
 MAINNET_UID = 1 # TODO change
-TESTNET_UID = 2 # TODO change
+TESTNET_UID = 301
 
 
 # ERA5 data loading constants
@@ -16,7 +16,7 @@ ERA5_DATA_VARS: List[str] = ["2m_temperature"]
 ERA5_DATE_RANGE: Tuple[str, str] = ("1960-01-01", "2024-10-31") # current latest inside that Zarr archive - not used currently
 
 ERA5_LATITUDE_RANGE: Tuple[float, float] = (-90.0, 90.0)
-ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 180.0)
+ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 179.75) # real ERA5 ranges
 ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (4, 12) # how many datapoints we want. The resolution is 0.25 degrees, so 4 means 1 degree. 
 ERA5_OLDEST_START_HOUR: int = -119 # 4 days and 23 hours ago.
 ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 24) # in hours, how many hours ahead we want to predict.

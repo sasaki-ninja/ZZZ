@@ -59,18 +59,26 @@ class Era5BaseLoader(ABC):
             dataset = dataset.assign_coords(latitude=dataset["latitude"].values - 90)
 
         dataset = dataset.sortby(["latitude", "longitude"])
-        dataset = dataset.sel(latitude=slice(*self.lat_range), longitude=slice(*self.lon_range))
         return dataset
 
-    def sample_bbox(self) -> Tuple[float, float, float, float]:
-        # make sure the lat and lon samples are exact coordinates of a point in the dataset.
-        start_idx_lat = np.random.randint(0, len(self.dataset.latitude) - self.area_sample_range[1])
-        lat_start = self.dataset.latitude.values[start_idx_lat]
-        lat_end = self.dataset.latitude.values[start_idx_lat + np.random.randint(*self.area_sample_range)]
+    def sample_bbox(self, fidelity: int = 4) -> Tuple[float, float, float, float]:
+        """
+        Sample a bounding box that is both inside the dataset and matching the 0.25 degree grid.
+        We can't assume the dataset is loaded, so have to manually convert the latitude and longitude ranges to the 0.25 degree grid.
+        Area sample range is already in 0.25 degree units.
 
-        start_idx_lon = np.random.randint(0, len(self.dataset.longitude) - self.area_sample_range[1])
-        lon_start = self.dataset.longitude.values[start_idx_lon]
-        lon_end = self.dataset.longitude.values[start_idx_lon + np.random.randint(*self.area_sample_range)]
+        Returns: 
+          - Latitude start
+          - Latitude end
+          - Longitude start
+          - Longitude end
+        """
+        # make sure the lat and lon samples are fixed to a 0.25 degree grid, so 4 measurements per degree.
+        lat_start = np.random.randint(self.lat_range[0] * fidelity, self.lat_range[1] * fidelity - self.area_sample_range[1]) / fidelity
+        lat_end = lat_start + np.random.randint(*self.area_sample_range) / fidelity
+
+        lon_start = np.random.randint(self.lon_range[0] * fidelity, self.lon_range[1] * fidelity - self.area_sample_range[1]) / fidelity
+        lon_end = lon_start + np.random.randint(*self.area_sample_range) / fidelity
         return lat_start, lat_end, lon_start, lon_end
     
     def get_data(

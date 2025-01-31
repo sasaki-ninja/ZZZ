@@ -32,7 +32,7 @@ from zeus.data.era5.era5_cds import Era5CDSLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
 from zeus.validator.constants import (
-    MAINNET_UID,
+    TESTNET_UID,
 )
 
 
@@ -82,7 +82,7 @@ class Validator(BaseValidatorNeuron):
         self.config.version = zeus.__version__
         self.config.type = self.neuron_type
 
-        wandb_project = self.config.wandb.project_name if self.config.netuid == MAINNET_UID else self.config.wandb.testnet_project_name
+        wandb_project = self.config.wandb.testnet_project_name if self.config.netuid == TESTNET_UID else self.config.wandb.project_name
 
         # Initialize the wandb run for the single project
         bt.logging.info(f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'")
