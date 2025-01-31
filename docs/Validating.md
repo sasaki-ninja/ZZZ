@@ -78,7 +78,7 @@ WANDB_API_KEY=your_wandb_api_key_here
 CDS_API_KEY=your_cds_api_key_here
 ```
 > [!IMPORTANT]
-> In order to send miners challenges involving the latest ERA5 data, you need to provide a Copernicus CDS API key. These can be obtained from the [following website](https://cds.climate.copernicus.eu/how-to-api). Please first create an account or login, and then scroll down until you see the code-box with 'key' in it on the 'How to API'-page. 
+> In order to send miners challenges involving the latest ERA5 data, you need to provide a Copernicus CDS API key. These can be obtained from the [following website](https://cds.climate.copernicus.eu/how-to-api). Please first [create an ECMWAF account or login](https://accounts.ecmwf.int/auth/realms/ecmwf/protocol/openid-connect/auth?client_id=cms-www&response_type=code&scope=openid%20email%20profile&redirect_uri=https%3A//www.ecmwf.int/openid-connect/keycloak&state=Ef80cVwOHe4gmpsmbyNs-8DkoLW8_cMG9gBdRNYawk4), and then scroll down until you see the code-box with 'key' in it on the 'How to API'-page. 
 
 If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord. Without W&B, miners will not be able to see their live scores, 
 so we highly recommend enabling this.
