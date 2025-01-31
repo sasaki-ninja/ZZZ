@@ -15,7 +15,7 @@
 
 Download the repository and navigate to the folder.
 ```bash
-git clone https://github.com/Orpheus-AI/ClimateAI.git && cd ClimateAI
+git clone https://github.com/Orpheus-AI/Zeus.git && cd Zeus
 ```
 
 We recommend using a Conda virtual environment to install the necessary Python packages.<br>
@@ -24,15 +24,15 @@ You can set up Conda with this [quick command-line install](https://docs.anacond
 With miniconda installed, you can create a virtual environment with this command:
 
 ```bash
-conda create -y -n climate python=3.11
+conda create -y -n zeus python=3.11
 ```
 
-To activate your virtual environment, run `conda activate climate`. To deactivate, `conda deactivate`.
+To activate your virtual environment, run `conda activate zeus`. To deactivate, `conda deactivate`.
 
 Install the remaining necessary requirements with the following chained command. This may take a few minutes to complete.
 
 ```bash
-conda activate climate
+conda activate zeus
 chmod +x setup.sh 
 ./setup.sh
 ```
@@ -89,7 +89,7 @@ BLACKLIST_FORCE_VALIDATOR_PERMIT=True          # Default setting to force valida
 Now you're ready to run your miner!
 
 ```bash
-conda activate climate
+conda activate zeus
 ./start_miner.sh
 ```
 
