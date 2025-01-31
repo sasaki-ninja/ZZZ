@@ -70,8 +70,8 @@ You can use the sample below as a starting point, but make sure to replace **wal
 ```bash
 # Subtensor Network Configuration:
 NETUID=301                                     # Network User ID options: ?,301
-SUBTENSOR_NETWORK=                             # Networks: finney, test, local
-SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
+SUBTENSOR_NETWORK=test                         # Networks: finney, test, local
+SUBTENSOR_CHAIN_ENDPOINT=wss://test.finney.opentensor.ai:443/
                                                # Endpoints:
                                                # - wss://entrypoint-finney.opentensor.ai:443
                                                # - wss://test.finney.opentensor.ai:443/
