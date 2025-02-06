@@ -32,6 +32,7 @@ from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import get_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
+from zeus.validator.constants import FORWARD_DELAY_SECONDS
 
 
 async def forward(self):
@@ -50,10 +51,15 @@ async def forward(self):
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
     
-    # Let's sample some data
     data_loader: Era5CDSLoader = self.cds_loader
+    if not data_loader.is_ready():
+        bt.logging.info("Data loader is not ready yet... Waiting until ERA5 data is downloaded.")
+        time.sleep(10) # Don't need to spam this message
+        return
+    
+    # Let's sample some data
     bt.logging.info(f"Sampling data...")
-    sample = data_loader.get_sample() # does not need data loader to be ready yet - we only select a box and time area.
+    sample = data_loader.get_sample()
     bt.logging.success(f"Data sampled with bounding box {bbox_to_str(sample.get_bbox())}")
     bt.logging.success(f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead.")	
 
@@ -83,7 +89,7 @@ async def forward(self):
         bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
         self.database.insert(sample, [miner.hotkey for miner in good_miners], [miner.prediction for miner in good_miners])
     # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
-    time.sleep(120)
+    time.sleep(FORWARD_DELAY_SECONDS - (time.time() - start))
 
 
 def complete_challenge(

@@ -158,6 +158,8 @@ class Era5CDSLoader(Era5BaseLoader):
                 # Most errors can occur and should continue, but force validators to authenticate.
                 if isinstance(e, HTTPError) and e.response.status_code == 401:
                     raise ValueError(f"Failed to authenticate with Copernicus API! Please specify an API key from https://cds.climate.copernicus.eu/how-to-api")
+                else:
+                    bt.logging.error(f"Failed to download ERA5 data for {timestamp.strftime('%Y-%m-%d')}: {e}")
 
     async def update_cache(self):
         current_day = get_today("D")

@@ -1,9 +1,9 @@
-apt update -y
-apt install -y \
+sudo apt update -y
+sudo apt install -y \
     python3-pip \
     nano \
     libgl1 \
     npm
 
-npm install -g pm2@latest
+sudo npm install -g pm2@latest
 pip install -e .

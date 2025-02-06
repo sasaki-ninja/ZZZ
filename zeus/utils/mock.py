@@ -2,6 +2,7 @@ import time
 
 import asyncio
 import random
+import numpy as np
 import bittensor as bt
 
 from typing import List
@@ -86,13 +87,12 @@ class MockDendrite(bt.dendrite):
                 if process_time < timeout:
                     s.dendrite.process_time = str(time.time() - start_time)
                     # Update the status code and status message of the dendrite to match the axon
-                    # TODO (developer): replace with your own expected synapse data
-                    s.dummy_output = s.dummy_input * 2
+                    s.predictions = np.random.randn(s.requested_hours, len(s.locations), len(s.locations[0])).tolist()
                     s.dendrite.status_code = 200
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)
                 else:
-                    s.dummy_output = 0
+                    s.predictions = []
                     s.dendrite.status_code = 408
                     s.dendrite.status_message = "Timeout"
                     synapse.dendrite.process_time = str(timeout)
