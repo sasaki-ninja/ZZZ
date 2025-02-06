@@ -4,6 +4,7 @@ from pathlib import Path
 MAINNET_UID = 1 # TODO change
 TESTNET_UID = 301
 
+FORWARD_DELAY_SECONDS = 120
 
 # ERA5 data loading constants
 GCLOUD_ERA5_URL: str = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -26,5 +27,6 @@ ERA5_START_SAMPLE_STD: float = 40 # see plot of distribution in Zeus/static/era5
 MIN_INTERPOLATION_DISTORTIONS = 5
 MAX_INTERPOLATION_DISTORTIONS = 50
 
+# Reward constants
 DIFFICULTY_OFFSET = 1.0 # twice the average of the Difficulty_grid
 DIFFICULTY_MULTIPLIER = 2.0 # make it easier to get a high score initially

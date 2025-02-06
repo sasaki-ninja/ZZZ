@@ -63,9 +63,9 @@ with codecs.open(
     version_string = version_match.group(1)
 
 setup(
-    name="Zeus",  # TODO(developer): Change this value to your module subnet name.
+    name="Zeus", 
     version=version_string,
-    description="Zeus subnet by Orpheus A.I. & BitMind", 
+    description="Zeus subnet by Orpheus A.I. (Incubated by BitMind)", 
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Orpheus-AI/Zeus", 
