@@ -170,6 +170,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug(
                 str(print_exception(type(err), err, err.__traceback__))
             )
+            exit() # so PM2 can restart the validator if crashed
 
     def run_in_background_thread(self):
         """

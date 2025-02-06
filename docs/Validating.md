@@ -14,7 +14,7 @@
 
 ## Installation
 > [!TIP]
-> If you are using RunPod, you can use our [dedicated template](https://runpod.io/console/deploy?template=x2lktx2xex&ref=97t9kcqz) which comes pre-installed with all required dependencies! Even without RunPod the [Docker image](https://hub.docker.com/repository/docker/ericorpheus/zeus/) behind this template might still work for your usecase. If you are using this template/image, you can skip all steps below except for cloning.
+> If you are using RunPod, you can use our [dedicated template](https://runpod.io/console/deploy?template=cyui16nkkd&ref=97t9kcqz) (or use the [Miner template](https://runpod.io/console/deploy?template=x2lktx2xex&ref=97t9kcqz) for GPU support) which comes pre-installed with all required dependencies! Even without RunPod the [Docker image](https://hub.docker.com/repository/docker/ericorpheus/zeus/) behind this template might still work for your usecase. If you are using this template/image, you can skip all steps below except for cloning.
 
 Download the repository and navigate to the folder.
 ```bash
@@ -71,7 +71,6 @@ SUBTENSOR_CHAIN_ENDPOINT=wss://test.finney.opentensor.ai:443/
 WALLET_NAME=default
 WALLET_HOTKEY=default
 
-# Note: If you're using RunPod, you must select a port >= 70000 for symmetric mapping
 # Validator Port Setting:
 AXON_PORT=8092
 PROXY_PORT=10913
@@ -102,8 +101,11 @@ Now you're ready to run your validator!
 
 ```bash
 conda activate zeus
-./start_validator.sh
+pm2 start run_neuron.py -- --validator 
 ```
+
+- Auto updates are enabled by default. To disable, run with `--no-auto-updates`.
+- Self-healing restarts are disabled by default (every 6 hours). To enable, run with `--self-heal`.
 
 ## Requirements
 We strive to make validation as simple as possible on our subnet, aiming to minimise storage and hardware requirements for our validators.
