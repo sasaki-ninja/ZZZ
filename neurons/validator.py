@@ -86,22 +86,40 @@ class Validator(BaseValidatorNeuron):
 
         # Initialize the wandb run for the single project
         bt.logging.info(f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'")
+        run_id = None
         try:
-            run = wandb.init(
+            # Check if the run already exists for this validator so we can continue it
+            runs = wandb.Api().runs(f"{self.config.wandb.entity}/{wandb_project}", 
+                filters={
+                        "display_name": run_name,
+                        "config.hotkey": self.config.hotkey
+                }, 
+                order="-created_at"
+            )
+            if len(runs) > 0:
+                run_id = runs[0].id
+        except Exception as e:
+            bt.logging.warning(e)
+            bt.logging.warning("Failed to fetch previous runs. Starting a new run.")
+    
+        try:
+            run_id = wandb.init(
                 name=run_name,
                 project=wandb_project,
                 entity=self.config.wandb.entity,
                 config=self.config,
                 dir=self.config.full_path,
-                reinit=True
-            )
+                reinit=True,
+                resume="allow",
+                id=run_id,
+            ).id
         except wandb.UsageError as e:
             bt.logging.warning(e)
             bt.logging.warning("Did you run wandb login?")
             return
 
         # Sign the run to ensure it's from the correct hotkey
-        signature = self.wallet.hotkey.sign(run.id.encode()).hex()
+        signature = self.wallet.hotkey.sign(run_id.encode()).hex()
         self.config.signature = signature
         wandb.config.update(self.config, allow_val_change=True)
 

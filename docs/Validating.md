@@ -105,7 +105,7 @@ pm2 start run_neuron.py -- --validator
 ```
 
 - Auto updates are enabled by default. To disable, run with `--no-auto-updates`.
-- Self-healing restarts are disabled by default (every 6 hours). To enable, run with `--self-heal`.
+- Self-healing restarts are disabled by default (every 3 hours). To enable, run with `--self-heal`.
 
 ## Requirements
 We strive to make validation as simple as possible on our subnet, aiming to minimise storage and hardware requirements for our validators.
