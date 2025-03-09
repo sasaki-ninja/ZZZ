@@ -113,4 +113,34 @@ def get_rewards(
             "score": score,
         }
  
+    # sort unpenalized/honest miners by their initial score to determine rankings.
+    honest_miners = [m for m in miners_data if m.metrics["penalty"] == 0.0]
+    honest_miners.sort(key=lambda x: x.metrics["initial_score"], reverse=True)
+    
+    # apply sigmoid reward distribution based on miners' ranking.
+    for rank, miner in enumerate(honest_miners, 1):
+        miner.reward = sigmoid_rank(float(rank))
+        miner.metrics["rank"] = rank
+        miner.metrics["score"] = miner.reward
+
+    # set zero reward for penalized/unhonest miners.
+    for miner in miners_data:
+        if miner.metrics["penalty"] != 0.0:
+            miner.reward = 0.0
+            miner.metrics["rank"] = -1
+            miner.metrics["score"] = 0.0
+ 
     return miners_data
+
+def sigmoid_rank(rank: float) -> float:
+    """
+    Apply an S-curve distribution (sigmoid function) to rank and compute a score in the range [0,1],
+    centered at rank 125 with a scaling factor of 20.
+    
+    Args:
+        rank (float): The rank position (1 to 256)
+    
+    Returns:
+        float: Sigmoid score between 0 and 1
+    """
+    return 1.0 / (1.0 + np.exp((rank - 125) / 20))
