@@ -72,45 +72,48 @@ def get_rewards(
     difficulty_grid: np.ndarray,
 ) -> List[MinerData]:
     """
-    Returns an array of rewards for the given query and responses.
+    Calculates rewards for miner predictions based on RMSE and relative difficulty.
 
     Args:
-    - sample (Era5Sample): The data sampled including input and output.
-    - responses (List[torch.Tensor]): A list of responses from the miners.
-    - difficulty_grid (np.ndarray): A matrix representing the difficulty of each coordinate in the sample.
+        output_data (torch.Tensor): The ground truth data.
+        miners_data (List[MinerData]): List of MinerData objects containing predictions.
+        difficulty_grid (np.ndarray): Difficulty grid for each coordinate. Currenly not used.
 
     Returns:
-    - np.ndarray: An array of rewards for the given query and responses.
-    - List[Dict[str, float]]: A list of metrics and scores for each miner as a dictionary.
+        List[MinerData]: List of MinerData objects with updated rewards and metrics.
     """
-
-    # based on historical time-derivate of variance we have calculated a difficulty per coordinate
-    # with some offset (the mean difficulty) and multiplier
-    z_score_grid = difficulty_grid * DIFFICULTY_MULTIPLIER + DIFFICULTY_OFFSET
+    rmse_values = []
 
     for miner_data in miners_data:
-        RMSE = -1.0 # default values if penalty occurs
-        score = 0.0
-
         prediction = help_format_miner_output(output_data, miner_data.prediction)
         penalty = compute_penalty(output_data, prediction)
 
-        # only score if no penalty
         if penalty == 0.0:
-            RMSE = (
-                (
-                    (prediction - output_data) / z_score_grid
-                ) ** 2
-            ).mean().sqrt()
-             # Miners should get the lowest MSE.
-            score = max(0.0, 1.0 - RMSE)
+            rmse = torch.sqrt(torch.mean((prediction - output_data) ** 2)).item()
+            rmse_values.append(rmse)
+        else:
+            rmse = -1.0 # Using -1.0 to indicate penalty.
 
-        miner_data.reward = score
         miner_data.metrics = {
             "penalty": penalty,
-            "RMSE": RMSE,
-            "avg_difficulty": difficulty_grid.mean(),
-            "score": score,
+            "RMSE": rmse,
         }
- 
+
+    if not rmse_values:
+        for miner_data in miners_data:
+            miner_data.metrics["score"] = 0.0
+        return miners_data
+
+    min_rmse = min(rmse_values)
+    max_rmse = max(rmse_values)
+
+    for miner_data in miners_data:
+        if miner_data.metrics["RMSE"] == -1.0:
+            miner_data.metrics["score"] = 0.0
+        else:
+            if max_rmse == min_rmse:
+                miner_data.metrics["score"] = 1.0
+            else:
+                miner_data.metrics["score"] = (max_rmse - miner_data.metrics["RMSE"]) / (max_rmse - min_rmse)
+
     return miners_data
