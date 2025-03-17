@@ -97,7 +97,6 @@ so we highly recommend enabling this.
 6. Go to your email and click the link in the email from `servicedesk@ecmwf.int`. You should be taken to a page to enter more information. If not, go the link from step 1 and try to login instead of registering. 
 7. Fill in the extra details (they are not checked at all and don't have to be accurate) and accept the statements. Click the "activate your profile" button.
 8. You should be redirected back to the [CDS website](https://cds.climate.copernicus.eu/how-to-api). Scroll down to the section labeled '1. Setup the CDS API personal access token.' You will find a code block containing your API key. **Crucially, copy only the value of the 'key' portion of this code block into your `validator.env` file.**
-
     For example, the code block will resemble the following:
 
     ```
@@ -106,9 +105,7 @@ so we highly recommend enabling this.
     ```
 
     **Only copy the string following 'key:' (i.e., `YOUR_API_KEY_THAT_SHOULD_BE_COPIED`) into your environment file.**
-
-
-
+9. Please ensure you accept the [terms for downloading ERA5](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=download#manage-licences), as this is the dataset used for validator queries.
 
 Now you're ready to run your validator!
 
