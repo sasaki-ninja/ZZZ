@@ -120,6 +120,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.env
 .venv
 env/
 venv/
@@ -164,5 +165,6 @@ testing/
 .vscode/settings.json
 
 # CUSTOM
+*.env
 *~
 wandb/
