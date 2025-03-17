@@ -14,14 +14,16 @@
 
 ## Installation
 > [!TIP]
-> If you are using RunPod, you can use our [dedicated template](https://runpod.io/console/deploy?template=cyui16nkkd&ref=97t9kcqz) (or use the [Miner template](https://runpod.io/console/deploy?template=x2lktx2xex&ref=97t9kcqz) for GPU support) which comes pre-installed with all required dependencies! Even without RunPod the [Docker image](https://hub.docker.com/repository/docker/ericorpheus/zeus/) behind this template might still work for your usecase. If you are using this template/image, you can skip all steps below except for cloning.
+> If you are using RunPod, you can use our [dedicated template](https://runpod.io/console/deploy?template=cyui16nkkd&ref=97t9kcqz) (or use the [Miner template](https://runpod.io/console/deploy?template=x2lktx2xex&ref=97t9kcqz) for GPU support) which comes pre-installed with all required dependencies! Even without RunPod the [Docker image](https://hub.docker.com/repository/docker/ericorpheus/zeus/) behind this template might still work for your usecase.
+
+If you are using the Docker image, you still need to clone the GitHub repository. However, all required libraries should be pre-installed within the Docker environment. Therefore, you can skip the Conda virtual environment setup.
 
 Download the repository and navigate to the folder.
 ```bash
 git clone https://github.com/Orpheus-AI/Zeus.git && cd Zeus
 ```
 
-We recommend using a Conda virtual environment to install the necessary Python packages.<br>
+If you are **not** using the Docker image, we recommend using a Conda virtual environment to install the necessary Python packages.<br>
 You can set up Conda with this [quick command-line install](https://docs.anaconda.com/free/miniconda/#quick-command-line-install), and create a virtual environment with this command:
 
 ```bash
@@ -34,7 +36,7 @@ Install the remaining necessary requirements with the following chained command.
 
 ```bash
 conda activate zeus
-chmod +x setup.sh 
+chmod +x setup.sh
 ./setup.sh
 ```
 
@@ -94,7 +96,18 @@ so we highly recommend enabling this.
 5. Fill in your details and complete the Captcha. Keep in mind that you need to be able to access the email address used. Then click the blue register button.
 6. Go to your email and click the link in the email from `servicedesk@ecmwf.int`. You should be taken to a page to enter more information. If not, go the link from step 1 and try to login instead of registering. 
 7. Fill in the extra details (they are not checked at all and don't have to be accurate) and accept the statements. Click the "activate your profile" button.
-8. You should be taken to the [CDS website](https://cds.climate.copernicus.eu/how-to-api) again. If you scroll down to "1. Setup the CDS API personal access token" you will see a code-block, displaying your key. Please copy only the **content** of the key to the environment file.
+8. You should be redirected back to the [CDS website](https://cds.climate.copernicus.eu/how-to-api). Scroll down to the section labeled '1. Setup the CDS API personal access token.' You will find a code block containing your API key. **Crucially, copy only the value of the 'key' portion of this code block into your `validator.env` file.**
+
+    For example, the code block will resemble the following:
+
+    ```
+    url: https://cds.climate.copernicus.eu/api
+    key: YOUR_API_KEY_THAT_SHOULD_BE_COPIED
+    ```
+
+    **Only copy the string following 'key:' (i.e., `YOUR_API_KEY_THAT_SHOULD_BE_COPIED`) into your environment file.**
+
+
 
 
 Now you're ready to run your validator!
