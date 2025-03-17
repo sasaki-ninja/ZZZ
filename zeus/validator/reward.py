@@ -102,6 +102,7 @@ def get_rewards(
     if not rmse_values:
         for miner_data in miners_data:
             miner_data.metrics["score"] = 0.0
+            miner_data.reward = 0.0
         return miners_data
 
     min_rmse = min(rmse_values)
@@ -115,5 +116,7 @@ def get_rewards(
                 miner_data.metrics["score"] = 1.0
             else:
                 miner_data.metrics["score"] = (max_rmse - miner_data.metrics["RMSE"]) / (max_rmse - min_rmse)
+        
+        miner_data.reward = miner_data.metrics["score"]
 
     return miners_data
