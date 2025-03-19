@@ -31,7 +31,6 @@ pm2 start neurons/validator.py --name $VALIDATOR_PROCESS_NAME -- \
   --wallet.hotkey $WALLET_HOTKEY \
   --axon.port $AXON_PORT \
   --proxy.port $PROXY_PORT \
-  --cds.api_key $CDS_API_KEY \
   --logging.info
 
 # synchronise the process list with the pm2 ecosystem file
