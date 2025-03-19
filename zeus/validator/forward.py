@@ -136,7 +136,7 @@ def complete_challenge(
     for miner in final_miners_data:
         if len(miner.prediction) != 0:
             miners_scores[uid] = miner.reward
-        bt.logging.success(f"UID: {uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}")
+        bt.logging.success(f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}")
     self.last_responding_miner_uids = sorted(miners_scores, key=miners_scores.get, reverse=True)
 
     # do W&B logging
