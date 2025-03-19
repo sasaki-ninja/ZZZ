@@ -12,12 +12,14 @@ import asyncio
 import traceback
 import httpx
 import base64
+from datetime import datetime, timedelta
+
 
 from zeus.utils.uids import get_random_uids
 from zeus.validator.reward import help_format_miner_output, compute_penalty
 from zeus.protocol import TimePredictionSynapse
 from zeus.utils.time import get_timestamp
-from zeus.utils.coordinates import get_grid
+from zeus.utils.coordinates import get_grid, get_closest_grid_points
 
 class ValidatorProxy:
     def __init__(
@@ -29,15 +31,15 @@ class ValidatorProxy:
         self.dendrite = bt.dendrite(wallet=validator.wallet)
         self.app = FastAPI()
         self.app.add_api_route(
-            "/proxy",
-            self.proxy,
+            "/predictGridTemperature",
+            self.predict_grid_temperature,
             methods=["POST"],
             dependencies=[Depends(self.get_self)],
         )
         self.app.add_api_route(
-            "/healthcheck",
-            self.healthcheck,
-            methods=["GET"],
+            "/predictPointTemperature",
+            self.predict_point_temperature,
+            methods=["POST"],
             dependencies=[Depends(self.get_self)],
         )
 
@@ -45,67 +47,21 @@ class ValidatorProxy:
         if self.validator.config.proxy.port:
             self.start_server()
 
-    def get_credentials(self):
-        with httpx.Client(timeout=httpx.Timeout(30)) as client:
-            response = client.post(
-                f"{self.validator.config.proxy.proxy_client_url}/get-credentials",
-                json={
-                    "postfix": (
-                        f":{self.validator.config.proxy.port}/validator_proxy"
-                        if self.validator.config.proxy.port
-                        else ""
-                    ),
-                    "uid": self.validator.uid,
-                },
-            )
-        response.raise_for_status()
-        response = response.json()
-        message = response["message"]
-        signature = response["signature"]
-        signature = base64.b64decode(signature)
-
-        def verify_credentials(public_key_bytes):
-            public_key = Ed25519PublicKey.from_public_bytes(public_key_bytes)
-            try:
-                public_key.verify(signature, message.encode("utf-8"))
-            except InvalidSignature:
-                raise Exception("Invalid signature")
-
-        self.verify_credentials = verify_credentials
-
     def start_server(self):
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.executor.submit(
             uvicorn.run, self.app, host="0.0.0.0", port=self.validator.config.proxy.port
         )
 
-    def authenticate_token(self, public_key_bytes):
-        public_key_bytes = base64.b64decode(public_key_bytes)
-        try:
-            self.verify_credentials(public_key_bytes)
-            bt.logging.info("Successfully authenticated token")
-            return public_key_bytes
-        except Exception as e:
-            bt.logging.error(f"Exception occured in authenticating token: {e}")
-            bt.logging.error(traceback.print_exc())
-            raise HTTPException(
-                status_code=401, detail="Error getting authentication token"
-            )
+    def authorize_token(self, headers):
+        pass
 
-    async def healthcheck(self, request: Request):
-        authorization: str = request.headers.get("authorization")
-
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Authorization header missing")
-
-        self.authenticate_token(authorization)
-        return {'status': 'healthy'}
-
-    async def proxy(self, request: Request):
+    async def predict_grid_temperature(self, request: Request):
         authorization: str = request.headers.get("authorization")
         if not authorization:
             raise HTTPException(status_code=401, detail="Authorization header missing")
-        #self.authenticate_token(authorization) # TODO
+        
+        # self.authenticate_token(authorization) # TODO
 
         bt.logging.info("[PROXY] Received an organic request!")
         # Finding some miners
@@ -134,6 +90,76 @@ class ValidatorProxy:
             raise HTTPException(status_code=400, detail=f"Invalid request, parsing failed with error:\n {error_msg}")
 
         # getting some responses from miners
+        predictions = await self.dendrite(
+            axons=[metagraph.axons[uid] for uid in miner_uids],
+    	    synapse=synapse,
+            deserialize=True,
+            timeout=10
+        )
+
+        bt.logging.info(f"[PROXY] Received {len(predictions)} responses from miners")
+        for prediction in predictions:
+            bt.logging.info(f"[PROXY] Prediction shape: {prediction.shape}")
+
+        # validating predictions and returning them
+        dummy_output = torch.zeros(predict_hours, grid.shape[0], grid.shape[1])
+        for prediction, uid in zip(predictions, miner_uids):
+            prediction = help_format_miner_output(dummy_output, prediction)
+            penalty = compute_penalty(dummy_output, prediction)
+            if penalty > 0:
+                # if there is a penalty, we skip this prediction
+                continue
+
+            bt.logging.info(f"[PROXY] Obtained a valid prediction from miner {uid}")
+            return {
+                'prediction': prediction.tolist(),
+                'grid': grid.tolist()
+            }
+        
+        return HTTPException(status_code=500, detail="No valid response received")
+
+    async def predict_point_temperature(self, request: Request):
+        authorization: str = request.headers.get("authorization")
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Authorization header missing")
+        
+        # self.authenticate_token(authorization) # TODO
+
+        bt.logging.info("[PROXY] Received an organic request!")
+        # Finding some miners
+        metagraph = self.validator.metagraph
+        miner_uids = self.validator.last_responding_miner_uids
+        if len(miner_uids) == 0:
+            bt.logging.warning("[PROXY] No recent miner uids found, sampling random uids")
+            miner_uids = get_random_uids(self.validator, k=self.validator.config.neuron.sample_size)
+
+        miner_uids[0] = 7
+
+        # catch errors to prevent log spam if API is missused
+        try:
+            payload = await request.json()
+            lat, lon = payload.get('lat', None), payload.get('lon', None)
+            if lat is None or lon is None:
+                raise HTTPException(status_code=400, detail="Invalid request, lat and lon are required")
+           
+            grid = get_closest_grid_points(lat, lon)
+
+            start_timestamp, end_timestamp, predict_hours = await self._handle_time_inputs(payload)
+            
+            synapse = TimePredictionSynapse(
+                locations=grid.tolist(), 
+                start_time=start_timestamp, 
+                end_time=end_timestamp,
+                requested_hours=predict_hours
+            )
+
+        except Exception as e:
+            bt.logging.info(f"[PROXY] Organic request was invalid.")
+            bt.logging.info(f"Error: {e}")
+            error_msg = traceback.format_exc()
+            raise HTTPException(status_code=400, detail=f"Invalid request, parsing failed with error:\n {error_msg}")
+
+        # getting some responses from miners
         bt.logging.info(f"[PROXY] Querying {len(miner_uids)} miners...")
         predictions = await self.dendrite(
             axons=[metagraph.axons[uid] for uid in miner_uids],
@@ -141,6 +167,10 @@ class ValidatorProxy:
             deserialize=True,
             timeout=10
         )
+
+        bt.logging.info(f"[PROXY] Received {len(predictions)} responses from miners")
+        for prediction in predictions:
+            bt.logging.info(f"[PROXY] Prediction shape: {prediction.shape}")
 
         # validating predictions and returning them
         dummy_output = torch.zeros(predict_hours, grid.shape[0], grid.shape[1])
@@ -150,14 +180,100 @@ class ValidatorProxy:
             if penalty > 0:
                 continue
 
-            bt.logging.info(f"[PROXY] Obtained a valid prediction from miner {uid}")
+            prediction_shape = prediction.shape
+            return await self._interpolate_prediction(prediction, prediction_shape, grid, lat, lon)
 
-            # miners were sorted in order of performance on last prediction, so return first valid one.
-            return {
-                'prediction': prediction.tolist()
-            }
-        
         return HTTPException(status_code=500, detail="No valid response received")
+
+    async def _handle_time_inputs(self, payload):
+            start_timestamp_input = payload.get('start_timestamp', None)
+            end_timestamp_input = payload.get('end_timestamp', None)
+            predict_hours_input = payload.get('predict_hours', None)
+
+            now = datetime.now()
+            current_hour = now.replace(minute=0, second=0, microsecond=0)
+
+            if start_timestamp_input is None and end_timestamp_input is None and predict_hours_input is not None:
+                predict_hours = int(predict_hours_input)
+                start_timestamp = current_hour
+                end_timestamp = start_timestamp + timedelta(hours=predict_hours)
+
+            elif start_timestamp_input is not None and end_timestamp_input is None and predict_hours_input is None:
+                start_timestamp = datetime.fromtimestamp(start_timestamp_input)
+                end_timestamp = start_timestamp + timedelta(hours=24)
+                predict_hours = 24
+
+            elif start_timestamp_input is not None and predict_hours_input is not None and end_timestamp_input is None:
+                start_timestamp = datetime.fromtimestamp(start_timestamp_input)
+                predict_hours = int(predict_hours_input)
+                end_timestamp = start_timestamp + timedelta(hours=predict_hours)
+
+            elif start_timestamp_input is not None and end_timestamp_input is not None and predict_hours_input is None:
+                start_timestamp = datetime.fromtimestamp(start_timestamp_input)
+                end_timestamp = datetime.fromtimestamp(end_timestamp_input)
+                predict_hours = int((end_timestamp - start_timestamp).total_seconds() // 3600)
+
+            elif start_timestamp_input is not None and end_timestamp_input is not None and predict_hours_input is not None:
+                start_timestamp = datetime.fromtimestamp(start_timestamp_input)
+                end_timestamp = datetime.fromtimestamp(end_timestamp_input)
+                predict_hours = int(predict_hours_input)
+
+                if int((end_timestamp - start_timestamp).total_seconds() // 3600) != predict_hours:
+                    raise HTTPException(status_code=400, detail="The difference between start and end timestamps does not match predict_hours.")
+
+            else:
+                start_timestamp = current_hour
+                end_timestamp = start_timestamp + timedelta(hours=24)
+                predict_hours = 24
+            
+            start_timestamp_float = start_timestamp.timestamp()
+            end_timestamp_float = end_timestamp.timestamp()
+
+            return start_timestamp_float, end_timestamp_float, predict_hours
+
+    async def _interpolate_prediction(self, prediction, prediction_shape, grid, lat, lon):
+        if prediction_shape[1] == 1 and prediction_shape[2] == 1:
+            prediction = prediction.squeeze(1).squeeze(1)
+            return {'prediction': prediction.tolist(), 'grid': grid.tolist()}
+
+        elif prediction_shape[1] == 2 and prediction_shape[2] == 1:
+            lat_diff = grid[1, 0][0].item() - grid[0, 0][0].item()
+            weight = lat_diff
+            weights = torch.tensor([1 - weight, weight]).unsqueeze(0).unsqueeze(2)
+            prediction = prediction * weights
+            prediction = prediction.sum(dim=1).squeeze(1)
+            return {'prediction': prediction.tolist(), 'grid': grid.tolist()}
+
+        elif prediction_shape[1] == 1 and prediction_shape[2] == 2:
+            lon_diff = grid[0, 1][1].item() - grid[0, 0][1].item()
+            weight = lon_diff
+            weights = torch.tensor([1 - weight, weight]).unsqueeze(0).unsqueeze(1)
+            prediction = prediction * weights
+            prediction = prediction.sum(dim=2).squeeze(1)
+            return {'prediction': prediction.tolist(), 'grid': grid.tolist()}
+
+        elif prediction_shape[1] == 2 and prediction_shape[2] == 2:
+            lat_diff = grid[1, 0][0].item() - grid[0, 0][0].item()
+            lon_diff = grid[0, 1][1].item() - grid[0, 0][1].item()
+
+            lat_weight = (lat - grid[0, 0][0].item()) / lat_diff
+            lon_weight = (lon - grid[0, 0][1].item()) / lon_diff
+
+            weights = torch.tensor([
+                [(1 - lat_weight) * (1 - lon_weight), (1 - lat_weight) * lon_weight],
+                [lat_weight * (1 - lon_weight), lat_weight * lon_weight]
+            ]).unsqueeze(0)
+
+            weights = weights.expand(prediction.shape[0], 2, 2)
+            prediction = prediction * weights
+            prediction = prediction.sum(dim=1).sum(dim=1)
+            return {'prediction': prediction.tolist(), 'grid': grid.tolist()}
+
+        else:
+            bt.logging.error(f"Invalid prediction shape: {prediction_shape}")
+            raise HTTPException(status_code=500, detail="Invalid prediction shape")
 
     async def get_self(self):
         return self
+
+        

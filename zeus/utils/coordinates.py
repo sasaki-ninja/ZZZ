@@ -62,3 +62,50 @@ def get_grid(lat_start: float, lat_end: float, lon_start: float, lon_end: float,
                     ),
                     dim=-1,
                 ) # (lat, lon, 2)
+
+def get_closest_grid_points(lat: float, lon: float, fidelity: float = 0.25) -> torch.Tensor:
+    """
+    Get the closest grid of lat-lon points for a single location based on the specified fidelity (degree).
+    The output grid will have the same shape structure as the get_grid function.
+    """
+    lat_remainder = lat % fidelity
+    lon_remainder = lon % fidelity
+
+    lat_points = []
+    lon_points = []
+
+    if lat_remainder == 0:
+        lat_points.append(lat)
+    else:
+        lat_points.extend([lat - lat_remainder, lat - lat_remainder + fidelity])
+
+    if lon_remainder == 0:
+        lon_points.append(lon)
+    else:
+        lon_points.extend([lon - lon_remainder, lon - lon_remainder + fidelity])
+
+    lat_tensor = torch.tensor(lat_points)
+    lon_tensor = torch.tensor(lon_points)
+
+    lat_start = lat_tensor.min().item()
+    lat_end = lat_tensor.max().item()
+    lon_start = lon_tensor.min().item()
+    lon_end = lon_tensor.max().item()
+
+    return torch.stack(
+        torch.meshgrid(
+            *[
+                torch.linspace(
+                    start,
+                    end,
+                    int((end - start) / fidelity) + 1
+                )
+                for start, end in [
+                    (lat_start, lat_end),
+                    (lon_start, lon_end)
+                ]
+            ],
+            indexing="ij",
+        ),
+        dim=-1,
+    )
