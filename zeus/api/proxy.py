@@ -13,7 +13,8 @@ import traceback
 import httpx
 import base64
 from datetime import datetime, timedelta
-
+from dotenv import load_dotenv
+import os
 
 from zeus.utils.uids import get_random_uids
 from zeus.validator.reward import help_format_miner_output, compute_penalty
@@ -26,6 +27,8 @@ class ValidatorProxy:
         self,
         validator,
     ):
+        load_dotenv(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../validator.env'))
+        self.proxy_api_key = os.getenv("PROXY_API_KEY")
         self.validator = validator
         #self.get_credentials()
         self.dendrite = bt.dendrite(wallet=validator.wallet)
@@ -54,15 +57,15 @@ class ValidatorProxy:
         )
 
     def authorize_token(self, headers):
-        pass
-
-    async def predict_grid_temperature(self, request: Request):
-        authorization: str = request.headers.get("authorization")
+        authorization: str = headers.get("authorization", None)
         if not authorization:
             raise HTTPException(status_code=401, detail="Authorization header missing")
-        
-        # self.authenticate_token(authorization) # TODO
 
+        if authorization != self.proxy_api_key:
+            raise HTTPException(status_code=401, detail="Invalid authorization token")
+
+    async def predict_grid_temperature(self, request: Request):
+        self.authorize_token(request.headers)
         bt.logging.info("[PROXY] Received an organic request!")
         # Finding some miners
         metagraph = self.validator.metagraph
@@ -119,11 +122,7 @@ class ValidatorProxy:
         return HTTPException(status_code=500, detail="No valid response received")
 
     async def predict_point_temperature(self, request: Request):
-        authorization: str = request.headers.get("authorization")
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Authorization header missing")
-        
-        # self.authenticate_token(authorization) # TODO
+        self.authorize_token(request.headers)
 
         bt.logging.info("[PROXY] Received an organic request!")
         # Finding some miners
@@ -132,8 +131,6 @@ class ValidatorProxy:
         if len(miner_uids) == 0:
             bt.logging.warning("[PROXY] No recent miner uids found, sampling random uids")
             miner_uids = get_random_uids(self.validator, k=self.validator.config.neuron.sample_size)
-
-        miner_uids[0] = 7
 
         # catch errors to prevent log spam if API is missused
         try:
