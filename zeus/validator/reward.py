@@ -23,7 +23,10 @@ import bittensor as bt
 from zeus.validator.miner_data import MinerData
 from zeus.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
 
-def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> torch.Tensor:
+
+def help_format_miner_output(
+    correct: torch.Tensor, response: torch.Tensor
+) -> torch.Tensor:
     """
     Reshape or slice miner output if it is almost the correct shape.
 
@@ -36,15 +39,19 @@ def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> t
     """
     if correct.shape == response.shape:
         return response
-    
+
     if correct.ndim + 1 == response.ndim and response.shape[-1] == 1:
         # miner forgot to squeeze.
         return response.squeeze()
-    
-    if correct.shape[:-1] == response.shape[:-1] and (correct.shape[-1] + 2) == response.shape[-1]:
+
+    if (
+        correct.shape[:-1] == response.shape[:-1]
+        and (correct.shape[-1] + 2) == response.shape[-1]
+    ):
         # miner included latitude and longitude, slice those off
         return response[..., 2:]
     return response
+
 
 def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     """
@@ -62,7 +69,7 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
         valid = False
     elif not torch.isfinite(response).all():
         valid = False
-    
+
     return 0.0 if valid else 1.0
 
 
@@ -92,7 +99,7 @@ def get_rewards(
             rmse = torch.sqrt(torch.mean((prediction - output_data) ** 2)).item()
             rmse_values.append(rmse)
         else:
-            rmse = -1.0 # Using -1.0 to indicate penalty.
+            rmse = -1.0  # Using -1.0 to indicate penalty.
 
         miner_data.metrics = {
             "penalty": penalty,
@@ -115,8 +122,10 @@ def get_rewards(
             if max_rmse == min_rmse:
                 miner_data.metrics["score"] = 1.0
             else:
-                miner_data.metrics["score"] = (max_rmse - miner_data.metrics["RMSE"]) / (max_rmse - min_rmse)
-        
+                miner_data.metrics["score"] = (
+                    max_rmse - miner_data.metrics["RMSE"]
+                ) / (max_rmse - min_rmse)
+
         miner_data.reward = miner_data.metrics["score"]
 
     return miners_data

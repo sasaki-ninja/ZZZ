@@ -26,16 +26,22 @@ from zeus.validator.constants import (
 class Era5CDSLoader(Era5BaseLoader):
 
     ERA5_DELAY_DAYS = 5
-        
+
     def __init__(
-            self,
-            validator_config: bt.Config,
-            cache_dir: Path = ERA5_CACHE_DIR,
-            **kwargs,
+        self,
+        validator_config: bt.Config,
+        cache_dir: Path = ERA5_CACHE_DIR,
+        **kwargs,
     ) -> None:
-        load_dotenv(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../../validator.env'))
+        load_dotenv(
+            os.path.join(
+                os.path.abspath(os.path.dirname(__file__)), "../../validator.env"
+            )
+        )
         self.cds_api_key = os.getenv("CDS_API_KEY")
-        self.client = cdsapi.Client(url=COPERNICUS_ERA5_URL, key=self.cds_api_key, quiet=True, progress=False)
+        self.client = cdsapi.Client(
+            url=COPERNICUS_ERA5_URL, key=self.cds_api_key, quiet=True, progress=False
+        )
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir: Path = cache_dir
@@ -53,23 +59,16 @@ class Era5CDSLoader(Era5BaseLoader):
         cut_off = get_today("h") - pd.Timedelta(days=self.ERA5_DELAY_DAYS)
         if self.last_stored_timestamp >= cut_off:
             return True
-        
+
         if not self.updater_running:
             bt.logging.info("ERA5 cache is not up to date, starting updater...")
             self.updater_running = True
             asyncio.create_task(self.update_cache())
         return False
-    
-    def load_dataset(self) -> Optional[xr.Dataset]:
-        era5_files = self.cache_dir.glob('*.nc')
-        datasets = [
-                xr.open_dataset(
-                    fname,
-                    engine="netcdf4"
-                )
-                for fname in era5_files
 
-        ]
+    def load_dataset(self) -> Optional[xr.Dataset]:
+        era5_files = self.cache_dir.glob("*.nc")
+        datasets = [xr.open_dataset(fname, engine="netcdf4") for fname in era5_files]
         if not datasets:
             return None
 
@@ -77,7 +76,7 @@ class Era5CDSLoader(Era5BaseLoader):
         dataset = dataset.sortby("valid_time")
         self.last_stored_timestamp = pd.Timestamp(dataset.valid_time.max().values)
         return dataset
-    
+
     def sample_time_range(self) -> Tuple[pd.Timestamp, pd.Timestamp, int]:
         """
         Sample random start and end times according to the provided ranges.
@@ -85,17 +84,17 @@ class Era5CDSLoader(Era5BaseLoader):
         num_predict_hours = np.random.randint(*self.predict_sample_range)
 
         # see visualisation in whitepaper for an elaborate explanation: basically make it more likely to sample beginning of time_sample_range
-        start_offset = min(0, # never skip a part of the future
-                            np.abs(
-                                int(np.random.normal(0, ERA5_START_SAMPLE_STD))
-                            ) + self.min_start_offset_hours
-                        )
+        start_offset = min(
+            0,  # never skip a part of the future
+            np.abs(int(np.random.normal(0, ERA5_START_SAMPLE_STD)))
+            + self.min_start_offset_hours,
+        )
 
         start_timestamp = get_today("h") + pd.Timedelta(hours=start_offset)
         end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
 
         return start_timestamp, end_timestamp, num_predict_hours
-    
+
     def get_sample(self) -> Era5Sample:
         """
         Get a current sample from the dataset.
@@ -113,18 +112,18 @@ class Era5CDSLoader(Era5BaseLoader):
             lon_end=lon_end,
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
-            predict_hours=predict_hours
+            predict_hours=predict_hours,
         )
 
     def get_output(self, sample: Era5Sample) -> Optional[torch.Tensor]:
         end_time = get_timestamp(sample.end_timestamp)
         if end_time > self.last_stored_timestamp:
             return None
-        
+
         start_time = end_time - pd.Timedelta(hours=sample.predict_hours - 1)
         data4d: torch.Tensor = self.get_data(
-            *sample.get_bbox(), 
-            start_time=start_time, 
+            *sample.get_bbox(),
+            start_time=start_time,
             end_time=end_time,
         )
         # Slice off the latitude and longitude for the output
@@ -134,42 +133,69 @@ class Era5CDSLoader(Era5BaseLoader):
         return os.path.join(self.cache_dir, f"era5_{timestamp.strftime('%Y-%m-%d')}.nc")
 
     async def download_era5_day(self, timestamp: pd.Timestamp):
-            request = {
-                "product_type": ["reanalysis"],
-                "variable": self.data_vars,
-                "year": [str(timestamp.year)],
-                "month": [str(timestamp.month).zfill(2)],
-                "day": [str(timestamp.day).zfill(2)],
-                "time": [
-                    "00:00", "01:00", "02:00",
-                    "03:00", "04:00", "05:00",
-                    "06:00", "07:00", "08:00",
-                    "09:00", "10:00", "11:00",
-                    "12:00", "13:00", "14:00",
-                    "15:00", "16:00", "17:00",
-                    "18:00", "19:00", "20:00",
-                    "21:00", "22:00", "23:00"
-                ],
-                "data_format": "netcdf",
-                "download_format": "unarchived",
-            }
-            try:
-                filename = self.get_file_name(timestamp)
-                self.client.retrieve("reanalysis-era5-single-levels", request, target=filename)
-                bt.logging.info(f"Downloaded ERA5 data for {timestamp.strftime('%Y-%m-%d')} to {filename}")
-            except Exception as e:
-                # Most errors can occur and should continue, but force validators to authenticate.
-                if isinstance(e, HTTPError) and e.response.status_code == 401:
-                    raise ValueError(f"Failed to authenticate with Copernicus API! Please specify an API key from https://cds.climate.copernicus.eu/how-to-api")
-                else:
-                    bt.logging.error(f"Failed to download ERA5 data for {timestamp.strftime('%Y-%m-%d')}: {e}")
+        request = {
+            "product_type": ["reanalysis"],
+            "variable": self.data_vars,
+            "year": [str(timestamp.year)],
+            "month": [str(timestamp.month).zfill(2)],
+            "day": [str(timestamp.day).zfill(2)],
+            "time": [
+                "00:00",
+                "01:00",
+                "02:00",
+                "03:00",
+                "04:00",
+                "05:00",
+                "06:00",
+                "07:00",
+                "08:00",
+                "09:00",
+                "10:00",
+                "11:00",
+                "12:00",
+                "13:00",
+                "14:00",
+                "15:00",
+                "16:00",
+                "17:00",
+                "18:00",
+                "19:00",
+                "20:00",
+                "21:00",
+                "22:00",
+                "23:00",
+            ],
+            "data_format": "netcdf",
+            "download_format": "unarchived",
+        }
+        try:
+            filename = self.get_file_name(timestamp)
+            self.client.retrieve(
+                "reanalysis-era5-single-levels", request, target=filename
+            )
+            bt.logging.info(
+                f"Downloaded ERA5 data for {timestamp.strftime('%Y-%m-%d')} to {filename}"
+            )
+        except Exception as e:
+            # Most errors can occur and should continue, but force validators to authenticate.
+            if isinstance(e, HTTPError) and e.response.status_code == 401:
+                raise ValueError(
+                    f"Failed to authenticate with Copernicus API! Please specify an API key from https://cds.climate.copernicus.eu/how-to-api"
+                )
+            else:
+                bt.logging.error(
+                    f"Failed to download ERA5 data for {timestamp.strftime('%Y-%m-%d')}: {e}"
+                )
 
     async def update_cache(self):
         current_day = get_today("D")
         tasks = []
         expected_files = set()
 
-        for days_ago in range(self.ERA5_DELAY_DAYS, self.ERA5_DELAY_DAYS + math.ceil(self.predict_sample_range[1] / 24) + 1):
+        for days_ago in range(
+            self.ERA5_DELAY_DAYS,
+            self.ERA5_DELAY_DAYS + math.ceil(self.predict_sample_range[1] / 24) + 1,
+        ):
             timestamp = current_day - pd.Timedelta(days=days_ago)
             filename = self.get_file_name(timestamp)
             expected_files.add(filename)
@@ -181,10 +207,12 @@ class Era5CDSLoader(Era5BaseLoader):
         self.dataset = self.preprocess_dataset(self.load_dataset())
 
         if not self.is_ready():
-            bt.logging.error("ERROR: ERA5 current cache update failed! This means we cannot send live challenges to miners. If this keeps occuring, please contact us on Discord.")
+            bt.logging.error(
+                "ERROR: ERA5 current cache update failed! This means we cannot send live challenges to miners. If this keeps occuring, please contact us on Discord."
+            )
 
         # remove any old cache.
-        for file in self.cache_dir.glob('*.nc'):
+        for file in self.cache_dir.glob("*.nc"):
             if str(file) not in expected_files:
                 os.remove(file)
 

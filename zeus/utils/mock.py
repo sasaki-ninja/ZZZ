@@ -87,7 +87,9 @@ class MockDendrite(bt.dendrite):
                 if process_time < timeout:
                     s.dendrite.process_time = str(time.time() - start_time)
                     # Update the status code and status message of the dendrite to match the axon
-                    s.predictions = np.random.randn(s.requested_hours, len(s.locations), len(s.locations[0])).tolist()
+                    s.predictions = np.random.randn(
+                        s.requested_hours, len(s.locations), len(s.locations[0])
+                    ).tolist()
                     s.dendrite.status_code = 200
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)

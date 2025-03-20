@@ -54,22 +54,20 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 # loading version from setup.py
-with codecs.open(
-    os.path.join(here, "zeus/__init__.py"), encoding="utf-8"
-) as init_file:
+with codecs.open(os.path.join(here, "zeus/__init__.py"), encoding="utf-8") as init_file:
     version_match = re.search(
         r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
     )
     version_string = version_match.group(1)
 
 setup(
-    name="Zeus", 
+    name="Zeus",
     version=version_string,
-    description="Zeus subnet by Orpheus A.I. (Incubated by BitMind)", 
+    description="Zeus subnet by Orpheus A.I. (Incubated by BitMind)",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Orpheus-AI/Zeus", 
-    author="orpheus-ai.nl", 
+    url="https://github.com/Orpheus-AI/Zeus",
+    author="orpheus-ai.nl",
     packages=find_packages(),
     include_package_data=True,
     author_email="zeus@orpheus-ai.nl",

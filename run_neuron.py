@@ -1,6 +1,7 @@
 """
 Thank you to Namoray of SN19 for their autoupdate implementation!
 """
+
 import os
 import sys
 import subprocess
@@ -25,7 +26,9 @@ def run_auto_update_self_heal(neuron_type, auto_update, self_heal):
             current_branch = subprocess.getoutput("git rev-parse --abbrev-ref HEAD")
             local_commit = subprocess.getoutput("git rev-parse HEAD")
             os.system("git fetch")
-            remote_commit = subprocess.getoutput(f"git rev-parse origin/{current_branch}")
+            remote_commit = subprocess.getoutput(
+                f"git rev-parse origin/{current_branch}"
+            )
 
             if should_update_local(local_commit, remote_commit):
                 print("Local repo is not up-to-date. Updating...")
@@ -36,8 +39,11 @@ def run_auto_update_self_heal(neuron_type, auto_update, self_heal):
                 if error:
                     print("Error in updating:", error)
                 else:
-                    print("Updated local repo to latest version: {}", format(remote_commit))
-                    
+                    print(
+                        "Updated local repo to latest version: {}",
+                        format(remote_commit),
+                    )
+
                     print("Running the autoupdate steps...")
                     # Trigger shell script. Make sure this file path starts from root
                     os.system(f"./setup.sh")
@@ -56,23 +62,35 @@ def run_auto_update_self_heal(neuron_type, auto_update, self_heal):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bittensor neuron run script with optional self-healing and auto-update.")
+    parser = argparse.ArgumentParser(
+        description="Bittensor neuron run script with optional self-healing and auto-update."
+    )
     parser.add_argument("--validator", action="store_true")
     parser.add_argument("--miner", action="store_true")
-    parser.add_argument("--self-heal", action="store_true", help="Periodically restart the PM2 processes.")
-    parser.add_argument("--no-auto-update", action="store_true", help="Disable the automatic update of the local repository")
+    parser.add_argument(
+        "--self-heal",
+        action="store_true",
+        help="Periodically restart the PM2 processes.",
+    )
+    parser.add_argument(
+        "--no-auto-update",
+        action="store_true",
+        help="Disable the automatic update of the local repository",
+    )
 
     args = parser.parse_args()
     if not (args.miner ^ args.validator):
-        print(f"Usage: python {__file__}" + "--validator | --miner [--self-heal --no-auto-update]")
+        print(
+            f"Usage: python {__file__}"
+            + "--validator | --miner [--self-heal --no-auto-update]"
+        )
         sys.exit(1)
 
-    neuron_type = 'miner' if args.miner else 'validator'
+    neuron_type = "miner" if args.miner else "validator"
 
     os.system(f"./start_{neuron_type}.sh")
 
     if not args.no_auto_update or args.self_heal:
         run_auto_update_self_heal(
-            neuron_type,
-            auto_update=not args.no_auto_update,
-            self_heal=args.self_heal)
+            neuron_type, auto_update=not args.no_auto_update, self_heal=args.self_heal
+        )
