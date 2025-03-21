@@ -104,6 +104,10 @@ class ValidatorProxy:
 
             grid = get_grid(lat_start, lat_end, lon_start, lon_end)
 
+            # get middle of the grid
+            lat = (lat_start + lat_end) / 2
+            lon = (lon_start + lon_end) / 2
+
             timezone_name = self.tf.timezone_at(lng=lon, lat=lat)
             timezone = pytz.timezone(timezone_name)
             start_timestamp, end_timestamp, predict_hours, timestamps = await self._handle_time_inputs(
