@@ -32,7 +32,7 @@ from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import get_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
-from zeus.validator.constants import FORWARD_DELAY_SECONDS
+from zeus.validator.constants import FORWARD_DELAY_SECONDS, MAINNET_UID
 
 
 async def forward(self):
@@ -70,7 +70,12 @@ async def forward(self):
     )
 
     # get some miners
-    miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    miner_uids = get_random_uids(
+        self.metagraph,
+        self.config.neuron.sample_size,
+        self.config.neuron.vpermit_tao_limit,
+        MAINNET_UID,
+    )
     axons = [self.metagraph.axons[uid] for uid in miner_uids]
     miner_hotkeys: List[str] = list([axon.hotkey for axon in axons])
 

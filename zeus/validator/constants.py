@@ -2,6 +2,7 @@ from typing import List, Tuple
 from pathlib import Path
 
 TESTNET_UID = 301
+MAINNET_UID = 18
 
 FORWARD_DELAY_SECONDS = 120
 
