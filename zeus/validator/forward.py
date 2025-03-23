@@ -32,7 +32,7 @@ from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import get_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
-from zeus.validator.constants import FORWARD_DELAY_SECONDS
+from zeus.validator.constants import FORWARD_DELAY_SECONDS, MAINNET_UID
 
 
 async def forward(self):
@@ -59,7 +59,6 @@ async def forward(self):
         time.sleep(10)  # Don't need to spam this message
         return
 
-    # Let's sample some data
     bt.logging.info(f"Sampling data...")
     sample = data_loader.get_sample()
     bt.logging.success(
@@ -69,12 +68,15 @@ async def forward(self):
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
     )
 
-    # get some miners
-    miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    miner_uids = get_random_uids(
+        self.metagraph,
+        self.config.neuron.sample_size,
+        self.config.neuron.vpermit_tao_limit,
+        MAINNET_UID,
+    )
     axons = [self.metagraph.axons[uid] for uid in miner_uids]
     miner_hotkeys: List[str] = list([axon.hotkey for axon in axons])
 
-    # The dendrite client queries the network.
     bt.logging.info(f"Querying {len(miner_uids)} miners..")
     start = time.time()
     responses = await self.dendrite(
@@ -138,35 +140,38 @@ def complete_challenge(
         difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
     )
 
-    # filter out only the miners that got a penalty.
-    final_miners_data = miners_data
-    if for_penalty:
-        final_miners_data = [
-            miner for miner in miners_data if miner.metrics["penalty"] > 0.0
-        ]
-        if len(final_miners_data) > 0:
-            bt.logging.success(f"Punishing miners that did not respond immediately.")
-
-    self.update_scores(
-        [miner.reward for miner in final_miners_data],
-        [miner.uid for miner in final_miners_data],
-    )
-
-    # print interesting miner predictions and store best miners for the Proxy
-    miners_scores = {}
-    for miner in final_miners_data:
-        if len(miner.prediction) != 0:
-            miners_scores[uid] = miner.reward
+    for miner in miners_data:
         bt.logging.success(
             f"UID: {miner.uid:3} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}"
         )
+
+    # filter out only the miners that got a penalty.
+    if for_penalty:
+        miners_data = [
+            miner for miner in miners_data 
+            if miner.metrics["penalty"] > 0.0
+        ]
+        penalized_uids = [miner.uid for miner in miners_data]
+        bt.logging.success(f"Punishing {len(miners_data)} miners that did not respond correctly: {penalized_uids}")
+
+    self.update_scores(
+        [miner.reward for miner in miners_data],
+        [miner.uid for miner in miners_data],
+    )
+
+    # print miner predictions and store best miners for the Proxy
+    miners_scores = {}
+    for miner in miners_data:
+        if len(miner.prediction) != 0:
+            miners_scores[uid] = miner.reward
+
     self.last_responding_miner_uids = sorted(
         miners_scores, key=miners_scores.get, reverse=True
     )
 
     # do W&B logging
     if not self.config.wandb.off:
-        for miner in final_miners_data:
+        for miner in miners_data:
             wandb.log(
                 {f"miner_{miner.uid}_{key}": val for key, val in miner.metrics.items()},
                 commit=False,  # All logging should be the same commit
@@ -183,4 +188,4 @@ def complete_challenge(
 
     # optionally return miners that should be stored if we were doing penalty
     if for_penalty:
-        return [miner for miner in miners_data if miner not in final_miners_data]
+        return [miner for miner in miners_data if miner not in miners_data]
