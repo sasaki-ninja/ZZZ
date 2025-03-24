@@ -4,7 +4,7 @@ from pathlib import Path
 TESTNET_UID = 301
 MAINNET_UID = 18
 
-FORWARD_DELAY_SECONDS = 120
+FORWARD_DELAY_SECONDS = 360
 
 # ERA5 data loading constants
 GCLOUD_ERA5_URL: str = (
