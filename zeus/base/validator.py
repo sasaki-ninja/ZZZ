@@ -68,12 +68,14 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
         # if we have saved scores, load them.
-        self.score_history_path = os.path.join(self.config.neuron.full_path, "scores.npy")
+        self.score_history_path = os.path.join(
+            self.config.neuron.full_path, "scores.npy"
+        )
         if os.path.exists(self.score_history_path):
             history_scores = np.load(self.score_history_path)
             self.scores[: len(history_scores)] = history_scores
             bt.logging.info("Loaded scores from history.")
-            
+
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
