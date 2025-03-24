@@ -140,37 +140,35 @@ def complete_challenge(
         difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
     )
 
-    for miner in miners_data:
-        bt.logging.success(
-            f"UID: {miner.uid:3} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}"
-        )
-
     # filter out only the miners that got a penalty.
+    final_miners_data = miners_data
     if for_penalty:
-        miners_data = [miner for miner in miners_data if miner.metrics["penalty"] > 0.0]
-        penalized_uids = [miner.uid for miner in miners_data]
-        bt.logging.success(
-            f"Punishing {len(miners_data)} miners that did not respond correctly: {penalized_uids}"
-        )
+        final_miners_data = [
+            miner for miner in miners_data if miner.metrics["penalty"] > 0.0
+        ]
+        if len(final_miners_data) > 0:
+            bt.logging.success(f"Punishing miners that did not respond immediately.")
 
     self.update_scores(
-        [miner.reward for miner in miners_data],
-        [miner.uid for miner in miners_data],
+        [miner.reward for miner in final_miners_data],
+        [miner.uid for miner in final_miners_data],
     )
 
-    # print miner predictions and store best miners for the Proxy
+    # print interesting miner predictions and store best miners for the Proxy
     miners_scores = {}
-    for miner in miners_data:
+    for miner in final_miners_data:
         if len(miner.prediction) != 0:
             miners_scores[uid] = miner.reward
-
+            bt.logging.success(
+                f"UID: {uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}"
+            )
     self.last_responding_miner_uids = sorted(
         miners_scores, key=miners_scores.get, reverse=True
     )
 
     # do W&B logging
     if not self.config.wandb.off:
-        for miner in miners_data:
+        for miner in final_miners_data:
             wandb.log(
                 {f"miner_{miner.uid}_{key}": val for key, val in miner.metrics.items()},
                 commit=False,  # All logging should be the same commit
@@ -187,4 +185,4 @@ def complete_challenge(
 
     # optionally return miners that should be stored if we were doing penalty
     if for_penalty:
-        return [miner for miner in miners_data if miner not in miners_data]
+        return [miner for miner in miners_data if miner not in final_miners_data]
