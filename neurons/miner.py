@@ -34,8 +34,8 @@ from zeus.base.miner import BaseMinerNeuron
 
 class Miner(BaseMinerNeuron):
     """
-    Your miner neuron class. You should use this class to define your miner's behavior. 
-    In particular, you should replace the forward function with your own logic. 
+    Your miner neuron class. You should use this class to define your miner's behavior.
+    In particular, you should replace the forward function with your own logic.
     You may also want to override the blacklist and priority functions according to your needs.
 
     Currently the miner simply does a request to OpenMeteo (https://open-meteo.com/) asking for a prediction.
@@ -49,9 +49,7 @@ class Miner(BaseMinerNeuron):
         # TODO(miner): Anything specific to your use case you can do here
         self.openmeteo_api = openmeteo_requests.Client()
 
-    async def forward(
-        self, synapse: TimePredictionSynapse
-    ) -> TimePredictionSynapse:
+    async def forward(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
         """
         Processes the incoming TimePredictionSynapse by performing a predefined operation on the input.
 
@@ -65,7 +63,10 @@ class Miner(BaseMinerNeuron):
         coordinates = torch.Tensor(synapse.locations)
         start_time = get_timestamp(synapse.start_time)
         end_time = get_timestamp(synapse.end_time)
-        bt.logging.info(f"We are receiving input of grid shape {coordinates.shape} and we are requested to predict {synapse.requested_hours} hours.")
+        bt.logging.info(f"Received request from {synapse.dendrite.hotkey[:5]}")
+        bt.logging.info(
+            f"Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
+        )
 
         ##########################################################################################################
         # TODO (miner) you likely want to improve over this baseline of calling OpenMeteo by changing this section
@@ -77,16 +78,19 @@ class Miner(BaseMinerNeuron):
             "start_date": start_time.strftime("%Y-%m-%d"),
             "end_date": end_time.strftime("%Y-%m-%d"),
         }
-        responses = self.openmeteo_api.weather_api("https://api.open-meteo.com/v1/forecast", params=params)
+        responses = self.openmeteo_api.weather_api(
+            "https://api.open-meteo.com/v1/forecast", params=params
+        )
         # get temperature output as grid of [time, lat, lon]
         output = np.stack(
-            [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses],
-            axis=1
+            [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses], axis=1
         ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
-        output = celcius_to_kelvin(output) # OpenMeteo does Celcius, scoring is based on Kelvin
+        output = celcius_to_kelvin(
+            output
+        )  # OpenMeteo does Celcius, scoring is based on Kelvin
 
         # OpenMeteo always does full days, so slice off any hours that weren't part of the range.
-        output = output[start_time.hour: (-24 + end_time.hour)]
+        output = output[start_time.hour : (-24 + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
         synapse.predictions = output.tolist()
@@ -125,9 +129,7 @@ class Miner(BaseMinerNeuron):
         Otherwise, allow the request to be processed further.
         """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning(
-                "Received a request without a dendrite or hotkey."
-            )
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
@@ -175,9 +177,7 @@ class Miner(BaseMinerNeuron):
         - A higher stake results in a higher priority value.
         """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning(
-                "Received a request without a dendrite or hotkey."
-            )
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
 
         caller_uid = self.metagraph.hotkeys.index(

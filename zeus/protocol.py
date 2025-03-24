@@ -25,7 +25,6 @@ from pydantic import Field
 from typing import List, Tuple
 
 
-
 # This is the protocol for the dummy miner and validator.
 # It is a simple request-response protocol where the validator sends a request
 # to the miner, and the miner responds with a dummy response.

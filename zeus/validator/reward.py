@@ -23,7 +23,10 @@ import bittensor as bt
 from zeus.validator.miner_data import MinerData
 from zeus.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
 
-def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> torch.Tensor:
+
+def help_format_miner_output(
+    correct: torch.Tensor, response: torch.Tensor
+) -> torch.Tensor:
     """
     Reshape or slice miner output if it is almost the correct shape.
 
@@ -36,15 +39,19 @@ def help_format_miner_output(correct: torch.Tensor, response: torch.Tensor) -> t
     """
     if correct.shape == response.shape:
         return response
-    
+
     if correct.ndim + 1 == response.ndim and response.shape[-1] == 1:
         # miner forgot to squeeze.
         return response.squeeze()
-    
-    if correct.shape[:-1] == response.shape[:-1] and (correct.shape[-1] + 2) == response.shape[-1]:
+
+    if (
+        correct.shape[:-1] == response.shape[:-1]
+        and (correct.shape[-1] + 2) == response.shape[-1]
+    ):
         # miner included latitude and longitude, slice those off
         return response[..., 2:]
     return response
+
 
 def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     """
@@ -62,7 +69,7 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
         valid = False
     elif not torch.isfinite(response).all():
         valid = False
-    
+
     return 0.0 if valid else 1.0
 
 
@@ -72,45 +79,53 @@ def get_rewards(
     difficulty_grid: np.ndarray,
 ) -> List[MinerData]:
     """
-    Returns an array of rewards for the given query and responses.
+    Calculates rewards for miner predictions based on RMSE and relative difficulty.
 
     Args:
-    - sample (Era5Sample): The data sampled including input and output.
-    - responses (List[torch.Tensor]): A list of responses from the miners.
-    - difficulty_grid (np.ndarray): A matrix representing the difficulty of each coordinate in the sample.
+        output_data (torch.Tensor): The ground truth data.
+        miners_data (List[MinerData]): List of MinerData objects containing predictions.
+        difficulty_grid (np.ndarray): Difficulty grid for each coordinate. Currenly not used.
 
     Returns:
-    - np.ndarray: An array of rewards for the given query and responses.
-    - List[Dict[str, float]]: A list of metrics and scores for each miner as a dictionary.
+        List[MinerData]: List of MinerData objects with updated rewards and metrics.
     """
-
-    # based on historical time-derivate of variance we have calculated a difficulty per coordinate
-    # with some offset (the mean difficulty) and multiplier
-    z_score_grid = difficulty_grid * DIFFICULTY_MULTIPLIER + DIFFICULTY_OFFSET
+    rmse_values = []
 
     for miner_data in miners_data:
-        RMSE = -1.0 # default values if penalty occurs
-        score = 0.0
-
         prediction = help_format_miner_output(output_data, miner_data.prediction)
         penalty = compute_penalty(output_data, prediction)
 
-        # only score if no penalty
         if penalty == 0.0:
-            RMSE = (
-                (
-                    (prediction - output_data) / z_score_grid
-                ) ** 2
-            ).mean().sqrt()
-             # Miners should get the lowest MSE.
-            score = max(0.0, 1.0 - RMSE)
+            rmse = torch.sqrt(torch.mean((prediction - output_data) ** 2)).item()
+            rmse_values.append(rmse)
+        else:
+            rmse = -1.0  # Using -1.0 to indicate penalty.
 
-        miner_data.reward = score
         miner_data.metrics = {
             "penalty": penalty,
-            "RMSE": RMSE,
-            "avg_difficulty": difficulty_grid.mean(),
-            "score": score,
+            "RMSE": rmse,
         }
- 
+
+    if not rmse_values:
+        for miner_data in miners_data:
+            miner_data.metrics["score"] = 0.0
+            miner_data.reward = 0.0
+        return miners_data
+
+    min_rmse = min(rmse_values)
+    max_rmse = max(rmse_values)
+
+    for miner_data in miners_data:
+        if miner_data.metrics["RMSE"] == -1.0:
+            miner_data.metrics["score"] = 0.0
+        else:
+            if max_rmse == min_rmse:
+                miner_data.metrics["score"] = 1.0
+            else:
+                miner_data.metrics["score"] = (
+                    max_rmse - miner_data.metrics["RMSE"]
+                ) / (max_rmse - min_rmse)
+
+        miner_data.reward = miner_data.metrics["score"]
+
     return miners_data

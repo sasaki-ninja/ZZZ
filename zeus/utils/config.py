@@ -26,9 +26,7 @@ from .logging import setup_events_logger
 
 def get_device_str() -> str:
     try:
-        output = subprocess.check_output(
-            ["nvidia-smi", "-L"], stderr=subprocess.STDOUT
-        )
+        output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT)
         if "NVIDIA" in output.decode("utf-8"):
             return "cuda"
     except Exception:
@@ -42,15 +40,13 @@ def get_device_str() -> str:
     return "cpu"
 
 
-
-
 def check_config(cls, config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir, 
+            config.logging.logging_dir,
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -257,17 +253,7 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--proxy.port",
-        type=int,
-        help="The port to run the proxy on.",
-        default=10913
-    )
-
-    parser.add_argument(
-        "--cds.api_key",
-        type=str,
-        help="The api key for the CDS API from Copernicus.",
-        default=""
+        "--proxy.port", type=int, help="The port to run the proxy on.", default=10913
     )
 
 

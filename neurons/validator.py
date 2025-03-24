@@ -70,38 +70,42 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         return await forward(self)
-    
+
     def init_wandb(self):
         if self.config.wandb.off:
             return
 
-        run_name = f'validator-{self.uid}-{zeus.__version__}'
+        run_name = f"validator-{self.uid}-{zeus.__version__}"
         self.config.run_name = run_name
         self.config.uid = self.uid
         self.config.hotkey = self.wallet.hotkey.ss58_address
         self.config.version = zeus.__version__
         self.config.type = self.neuron_type
 
-        wandb_project = self.config.wandb.testnet_project_name if self.config.netuid == TESTNET_UID else self.config.wandb.project_name
+        wandb_project = (
+            self.config.wandb.testnet_project_name
+            if self.config.netuid == TESTNET_UID
+            else self.config.wandb.project_name
+        )
 
         # Initialize the wandb run for the single project
-        bt.logging.info(f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'")
+        bt.logging.info(
+            f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'"
+        )
         run_id = None
         try:
             # Check if the run already exists for this validator so we can continue it
-            runs = wandb.Api().runs(f"{self.config.wandb.entity}/{wandb_project}", 
-                filters={
-                        "display_name": run_name,
-                        "config.hotkey": self.config.hotkey
-                }, 
-                order="-created_at"
+            runs = wandb.Api().runs(
+                f"{self.config.wandb.entity}/{wandb_project}",
+                filters={"display_name": run_name, "config.hotkey": self.config.hotkey},
+                order="-created_at",
             )
             if len(runs) > 0:
                 run_id = runs[0].id
         except Exception as e:
             bt.logging.warning(e)
             bt.logging.warning("Failed to fetch previous runs. Starting a new run.")
-    
+
         try:
             run_id = wandb.init(
                 name=run_name,
