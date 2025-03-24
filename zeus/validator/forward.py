@@ -147,12 +147,11 @@ def complete_challenge(
 
     # filter out only the miners that got a penalty.
     if for_penalty:
-        miners_data = [
-            miner for miner in miners_data 
-            if miner.metrics["penalty"] > 0.0
-        ]
+        miners_data = [miner for miner in miners_data if miner.metrics["penalty"] > 0.0]
         penalized_uids = [miner.uid for miner in miners_data]
-        bt.logging.success(f"Punishing {len(miners_data)} miners that did not respond correctly: {penalized_uids}")
+        bt.logging.success(
+            f"Punishing {len(miners_data)} miners that did not respond correctly: {penalized_uids}"
+        )
 
     self.update_scores(
         [miner.reward for miner in miners_data],

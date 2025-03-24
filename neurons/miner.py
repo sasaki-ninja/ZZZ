@@ -64,7 +64,9 @@ class Miner(BaseMinerNeuron):
         start_time = get_timestamp(synapse.start_time)
         end_time = get_timestamp(synapse.end_time)
         bt.logging.info(f"Received request from {synapse.dendrite.hotkey[:5]}")
-        bt.logging.info(f"Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}.")
+        bt.logging.info(
+            f"Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
+        )
 
         ##########################################################################################################
         # TODO (miner) you likely want to improve over this baseline of calling OpenMeteo by changing this section

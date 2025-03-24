@@ -110,8 +110,8 @@ class ValidatorProxy:
 
             timezone_name = self.tf.timezone_at(lng=lon, lat=lat)
             timezone = pytz.timezone(timezone_name)
-            start_timestamp, end_timestamp, predict_hours, timestamps = await self._handle_time_inputs(
-                payload, timezone
+            start_timestamp, end_timestamp, predict_hours, timestamps = (
+                await self._handle_time_inputs(payload, timezone)
             )
 
             synapse = TimePredictionSynapse(
@@ -186,8 +186,8 @@ class ValidatorProxy:
 
             timezone_name = self.tf.timezone_at(lng=lon, lat=lat)
             timezone = pytz.timezone(timezone_name)
-            start_timestamp, end_timestamp, predict_hours, timestamps = await self._handle_time_inputs(
-                payload, timezone
+            start_timestamp, end_timestamp, predict_hours, timestamps = (
+                await self._handle_time_inputs(payload, timezone)
             )
 
             synapse = TimePredictionSynapse(
