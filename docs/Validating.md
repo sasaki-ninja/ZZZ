@@ -47,7 +47,7 @@ To validate on our subnet, you must have a registered hotkey.
 #### Mainnet
 
 ```bash
-btcli s register --netuid [net_uid] --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network finney
+btcli s register --netuid 18 --wallet.name [wallet_name] --wallet.hotkey [wallet.hotkey] --subtensor.network finney
 ```
 
 #### Testnet
@@ -62,9 +62,9 @@ Before launching your validator, make sure to create a file called `validator.en
 You can use the sample below as a starting point, but make sure to replace **wallet_name**, **wallet_hotkey**, **axon_port**, **wandb_api_key** and **cds_api_key**.
 
 ```bash
-NETUID=301                                      # Network User ID options: ?,301
-SUBTENSOR_NETWORK=test                          # Networks: finney, test, local
-SUBTENSOR_CHAIN_ENDPOINT=wss://test.finney.opentensor.ai:443/
+NETUID=18                                       # Network User ID options: 18,301
+SUBTENSOR_NETWORK=finney                        # Networks: finney, test, local
+SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
                                                 # Endpoints:
                                                 # - wss://entrypoint-finney.opentensor.ai:443
                                                 # - wss://test.finney.opentensor.ai:443/
@@ -74,12 +74,13 @@ WALLET_NAME=default
 WALLET_HOTKEY=default
 
 # Validator Port Setting:
-AXON_PORT=8092
-PROXY_PORT=10913
+AXON_PORT=
+PROXY_PORT=
 
 # API Keys:
-WANDB_API_KEY=your_wandb_api_key_here
-CDS_API_KEY=your_cds_api_key_here
+WANDB_API_KEY=      # https://wandb.ai/authorize
+CDS_API_KEY =       # https://github.com/Orpheus-AI/Zeus/blob/main/docs/Validating.md#ecmwf
+PROXY_API_KEY=      # Your Proxy API Key, you can generate it yourself
 ```
 If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord. Without W&B, miners will not be able to see their live scores, 
 so we highly recommend enabling this.
