@@ -18,6 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import os
 import copy
 import sys
 import numpy as np
@@ -66,7 +67,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-
+        # if we have saved scores, load them.
+        self.score_history_path = os.path.join(self.config.neuron.full_path, "scores.npy")
+        if os.path.exists(self.score_history_path):
+            history_scores = np.load(self.score_history_path)
+            self.scores[: len(history_scores)] = history_scores
+            bt.logging.info("Loaded scores from history.")
+            
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
@@ -347,16 +354,17 @@ class BaseValidatorNeuron(BaseNeuron):
             )
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
-        # shape: [ metagraph.n ]
-        scattered_rewards: np.ndarray = np.zeros_like(self.scores)
+        scattered_rewards: np.ndarray = self.scores.copy()
         scattered_rewards[uids_array] = rewards
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
-        # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
+
+        bt.logging.info(f"Old moving avg scores: {self.scores}")
         self.scores: np.ndarray = alpha * scattered_rewards + (1 - alpha) * self.scores
-        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
+        bt.logging.info(f"New moving avg scores: {self.scores}")
+        np.save(self.score_history_path, self.scores)
 
     def save_state(self):
         """Saves the state of the validator to a file."""
