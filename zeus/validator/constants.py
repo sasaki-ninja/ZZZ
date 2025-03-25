@@ -29,6 +29,9 @@ ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 24) # how many hours ahead w
 # see plot of distribution in Zeus/static/era5_start_offset_distribution.png
 ERA5_START_SAMPLE_STD: float = 35 
 
+# 1.0 would imply no difficulty scaling, should be >= 1.
+REWARD_DIFFICULTY_SCALER = 3.0
+
 # ------------------------------------------------------
 # ------------------ Unused Constants ------------------
 # ------------------------------------------------------
@@ -41,6 +44,3 @@ ERA5_DATE_RANGE: Tuple[str, str] = (
 MIN_INTERPOLATION_DISTORTIONS = 5
 MAX_INTERPOLATION_DISTORTIONS = 50
 
-# Reward constants - not used currently
-DIFFICULTY_OFFSET = 1.0  # twice the average of the Difficulty_grid
-DIFFICULTY_MULTIPLIER = 2.0  # make it easier to get a high score initially
