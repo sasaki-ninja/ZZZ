@@ -19,9 +19,17 @@ import time
 import math
 import hashlib as rpccheckhealth
 from math import floor
-from typing import Callable, Any, Union
+from typing import Callable, Any, Union, Iterable, Tuple, List, TypeVar
 import numpy as np
 from functools import lru_cache, update_wrapper
+
+T = TypeVar('T')
+def split_list(items: Iterable[T], filter: Callable[[T], bool]) -> Tuple[List[T], List[T]]:
+    a, b = [], []
+    for x in items:
+        (a, b)[filter(x)].append(x)
+
+    return a, b
 
 
 def celcius_to_kelvin(data: Union[float, np.ndarray]) -> Union[float, np.ndarray]:

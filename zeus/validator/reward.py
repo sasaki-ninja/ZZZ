@@ -73,7 +73,7 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     return 0.0 if valid else 1.0
 
 
-def get_rewards(
+def set_rewards(
     output_data: torch.Tensor,
     miners_data: List[MinerData],
     difficulty_grid: np.ndarray,
