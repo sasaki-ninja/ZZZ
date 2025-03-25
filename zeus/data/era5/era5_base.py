@@ -12,7 +12,7 @@ from zeus.validator.constants import (
     ERA5_LONGITUDE_RANGE,
     ERA5_DATE_RANGE,
     ERA5_AREA_SAMPLE_RANGE,
-    ERA5_OLDEST_START_HOUR,
+    ERA5_START_OFFSET_RANGE,
     ERA5_HOURS_PREDICT_RANGE,
 )
 
@@ -25,10 +25,8 @@ class Era5BaseLoader(ABC):
         lat_range: Tuple[float, float] = ERA5_LATITUDE_RANGE,
         lon_range: Tuple[float, float] = ERA5_LONGITUDE_RANGE,
         date_range: Tuple[str, str] = ERA5_DATE_RANGE,
-        area_sample_range: Tuple[
-            float, float
-        ] = ERA5_AREA_SAMPLE_RANGE,  # in degrees, there is 4 measurements per degree.
-        min_start_offset_hours: int = ERA5_OLDEST_START_HOUR,
+        area_sample_range: Tuple[ float, float] = ERA5_AREA_SAMPLE_RANGE,
+        start_offset_range: Tuple[int, int] = ERA5_START_OFFSET_RANGE,
         predict_sample_range: Tuple[float, float] = ERA5_HOURS_PREDICT_RANGE,
         noise_factor: float = 1e-3,
     ) -> None:
@@ -40,7 +38,7 @@ class Era5BaseLoader(ABC):
         self.date_range = list(map(pd.to_datetime, sorted(date_range)))
 
         self.area_sample_range = sorted(area_sample_range)
-        self.min_start_offset_hours = min_start_offset_hours
+        self.start_offset_range = start_offset_range
         self.predict_sample_range = sorted(predict_sample_range)
 
         self.dataset = self.preprocess_dataset(self.load_dataset())

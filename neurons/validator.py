@@ -52,8 +52,8 @@ class Validator(BaseValidatorNeuron):
         self.last_responding_miner_uids = []
         self.validator_proxy = ValidatorProxy(self)
 
-        self.google_loader = ERA5GoogleLoader()
-        self.cds_loader = Era5CDSLoader(self.config)
+        #self.google_loader = ERA5GoogleLoader()
+        self.cds_loader = Era5CDSLoader()
 
         self.database = ResponseDatabase(self.cds_loader)
 

@@ -18,18 +18,16 @@ ERA5_DATA_VARS: List[str] = ["2m_temperature"]
 
 ERA5_LATITUDE_RANGE: Tuple[float, float] = (-90.0, 90.0)
 ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 179.75)  # real ERA5 ranges
-ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (
-    4,
-    12,
-)  # how many datapoints we want. The resolution is 0.25 degrees, so 4 means 1 degree.
-ERA5_OLDEST_START_HOUR: int = -119  # 4 days and 23 hours ago.
-ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (
-    1,
-    24,
-)  # in hours, how many hours ahead we want to predict.
-ERA5_START_SAMPLE_STD: float = (
-    40  # see plot of distribution in Zeus/static/era5_start_offset_distribution.png
-)
+
+# how many datapoints we want. The resolution is 0.25 degrees, so 4 means 1 degree.
+ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (4,12,) 
+
+ERA5_START_OFFSET_RANGE: Tuple[int, int] = (-119, 168)  # 4 days and 23 hours ago <---> until 7 days in future
+ERA5_UNIFORM_START_OFFSET_PROB: float = 0.1
+ERA5_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 24) # how many hours ahead we want to predict.
+
+# see plot of distribution in Zeus/static/era5_start_offset_distribution.png
+ERA5_START_SAMPLE_STD: float = 35 
 
 # ------------------------------------------------------
 # ------------------ Unused Constants ------------------

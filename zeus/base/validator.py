@@ -279,7 +279,7 @@ class BaseValidatorNeuron(BaseNeuron):
             netuid=self.config.netuid,
             uids=uint_uids,
             weights=uint_weights,
-            wait_for_finalization=False,
+            wait_for_finalization=True, # make potential issues visible
             wait_for_inclusion=False,
             version_key=self.spec_version,
         )

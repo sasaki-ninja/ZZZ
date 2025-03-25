@@ -56,7 +56,7 @@ async def forward(self):
         bt.logging.info(
             "Data loader is not ready yet... Waiting until ERA5 data is downloaded."
         )
-        time.sleep(10)  # Don't need to spam this message
+        time.sleep(10)  # Don't need to spam above message
         return
 
     bt.logging.info(f"Sampling data...")
