@@ -21,6 +21,8 @@ tqdm==4.67.1
 cdsapi==0.7.5
 dotenv==0.9.9
 
+check_shapes==1.1.1
+
 # validators only
 timezonefinder==6.5.8
 
