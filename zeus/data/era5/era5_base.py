@@ -116,6 +116,7 @@ class Era5BaseLoader(ABC):
         )
         # CDS NC files don't have time but 'valid_time' instead.
         if "valid_time" in subset.dims:
+            # increment end time to make it inclusive
             subset = subset.sel(valid_time=slice(start_time, end_time))
         else:
             subset = subset.sel(time=slice(start_time, end_time))

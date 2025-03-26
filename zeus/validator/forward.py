@@ -75,6 +75,7 @@ async def forward(self):
         self.config.neuron.vpermit_tao_limit,
         MAINNET_UID,
     )
+
     axons = [self.metagraph.axons[uid] for uid in miner_uids]
     miner_hotkeys: List[str] = list([axon.hotkey for axon in axons])
 
@@ -98,14 +99,18 @@ async def forward(self):
     good_miners, bad_miners = split_list(miners_data, lambda m: m.metrics["penalty"] == 0.0)
 
     if len(bad_miners) > 0:
-        bt.logging.success(f"Punishing miners that did not respond immediately.")
+        uids = [miner.uid for miner in bad_miners]
+        bt.logging.success(f"Punishing miners that did not respond immediately: {uids}")
         self.update_scores(
             [miner.reward for miner in bad_miners],
-            [miner.uid for miner in bad_miners],
+            uids,
         )
         do_wandb_logging(self, sample, bad_miners)
 
     if len(good_miners) > 0:
+         # store non-penalty miners for proxy
+        self.last_responding_miner_uids = [m.uid for m in good_miners]
+
         bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
         self.database.insert(
             sample,
@@ -134,12 +139,6 @@ def complete_challenge(
         [miner.reward for miner in miners_data],
         [miner.uid for miner in miners_data],
     )
-
-    # store best miner for proxy
-    self.last_responding_miner_uids = [
-        m.uid for m in sorted(miners_data, key=lambda m: m.reward, reverse=True) 
-        if m.reward > 0
-    ]
 
     for miner in miners_data:
         bt.logging.success(

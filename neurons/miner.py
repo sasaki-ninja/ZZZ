@@ -85,12 +85,11 @@ class Miner(BaseMinerNeuron):
         output = np.stack(
             [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses], axis=1
         ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
-        output = celcius_to_kelvin(
-            output
-        )  # OpenMeteo does Celcius, scoring is based on Kelvin
+        # OpenMeteo does Celcius, scoring is based on Kelvin
+        output = celcius_to_kelvin(output)
 
-        # OpenMeteo always does full days, so slice off any hours that weren't part of the range.
-        output = output[start_time.hour : (-24 + end_time.hour)]
+        # OpenMeteo returns full days, so slice, make sure end hour is included.
+        output = output[start_time.hour : (-23 + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
         synapse.predictions = output.tolist()

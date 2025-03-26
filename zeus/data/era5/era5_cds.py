@@ -41,6 +41,7 @@ class Era5CDSLoader(Era5BaseLoader):
             )
         )
         self.cds_api_key = os.getenv("CDS_API_KEY")
+        self.cds_api_key = "f3ed60cc-d243-44d5-b3e5-7646884ad3e7"
         self.client = cdsapi.Client(
             url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False
         )
@@ -100,7 +101,7 @@ class Era5CDSLoader(Era5BaseLoader):
             start_offset = int(np.random.uniform(*self.start_offset_range))
 
         start_timestamp = get_today("h") + pd.Timedelta(hours=start_offset)
-        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
+        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours - 1)
 
         return start_timestamp, end_timestamp, num_predict_hours
 
@@ -129,10 +130,9 @@ class Era5CDSLoader(Era5BaseLoader):
         if end_time > self.last_stored_timestamp:
             return None
 
-        start_time = end_time - pd.Timedelta(hours=sample.predict_hours - 1)
         data4d: torch.Tensor = self.get_data(
             *sample.get_bbox(),
-            start_time=start_time,
+            start_time=get_timestamp(sample.start_timestamp),
             end_time=end_time,
         )
         # Slice off the latitude and longitude for the output
