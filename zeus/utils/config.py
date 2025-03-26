@@ -197,7 +197,7 @@ def add_validator_args(cls, parser):
         "--neuron.sample_size",
         type=int,
         help="The number of miners to query in a single step.",
-        default=50,
+        default=125,
     )
 
     parser.add_argument(
@@ -211,7 +211,7 @@ def add_validator_args(cls, parser):
         "--neuron.moving_average_alpha",
         type=float,
         help="Moving average alpha parameter, how much to add of the new observation.",
-        default=0.1,
+        default=0.2,
     )
 
     parser.add_argument(
