@@ -41,7 +41,6 @@ class Era5CDSLoader(Era5BaseLoader):
             )
         )
         self.cds_api_key = os.getenv("CDS_API_KEY")
-        self.cds_api_key = "f3ed60cc-d243-44d5-b3e5-7646884ad3e7"
         self.client = cdsapi.Client(
             url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False
         )
