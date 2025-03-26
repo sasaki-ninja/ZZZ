@@ -1,27 +1,33 @@
+from typing import List, Union, Dict, Any, Tuple
+from functools import partial
 import os
+import time
 import base64
 import asyncio
 import traceback
 
 import bittensor as bt
+import numpy as np
 import pandas as pd
 import pytz
 import torch
 import uvicorn
 
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from cryptography.exceptions import InvalidSignature
 from fastapi import FastAPI, HTTPException, Depends, Request
 from timezonefinder import TimezoneFinder
 
 from zeus.utils.uids import get_random_uids
+from zeus.validator.constants import (
+    MAINNET_UID, ERA5_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
+)
 from zeus.validator.reward import help_format_miner_output, compute_penalty
 from zeus.protocol import TimePredictionSynapse
-from zeus.utils.time import get_timestamp
-from zeus.utils.coordinates import get_grid, get_closest_grid_points
+from zeus.utils.time import get_timestamp, get_today, get_hours, safe_tz_convert
+from zeus.utils.coordinates import get_grid, expand_to_grid, interp_coordinates
+
+from zeus.api.eager_dendrite import EagerDendrite
 
 
 class ValidatorProxy:
@@ -33,9 +39,9 @@ class ValidatorProxy:
             os.path.join(os.path.abspath(os.path.dirname(__file__)), "../validator.env")
         )
         self.proxy_api_key = os.getenv("PROXY_API_KEY")
-        self.tf = TimezoneFinder()
+        self.timezone_finder = TimezoneFinder()
         self.validator = validator
-        self.dendrite = bt.dendrite(wallet=validator.wallet)
+        self.dendrite = EagerDendrite(wallet=validator.wallet)
         self.app = FastAPI()
         self.app.add_api_route(
             "/predictGridTemperature",
@@ -54,6 +60,9 @@ class ValidatorProxy:
         if self.validator.config.proxy.port:
             self.start_server()
 
+    async def get_self(self):
+        return self
+
     def start_server(self):
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.executor.submit(
@@ -68,343 +77,212 @@ class ValidatorProxy:
         if authorization != self.proxy_api_key:
             raise HTTPException(status_code=401, detail="Invalid authorization token")
 
+    def get_axons(self) -> List[bt.Axon]:
+        metagraph = self.validator.metagraph
+        miner_uids: List[int] = self.validator.last_responding_miner_uids[:PROXY_QUERY_K]
+
+        if len(miner_uids) < PROXY_QUERY_K:
+            bt.logging.warning(
+                    "[PROXY] Not enough recent miner uids found, sampling additional random uids"
+            )
+            miner_uids.extend(
+                get_random_uids(
+                    metagraph, 
+                    PROXY_QUERY_K - len(miner_uids),
+                    self.validator.config.neuron.vpermit_tao_limit,
+                    MAINNET_UID,
+                )
+            )
+        
+        return [metagraph.axons[uid] for uid in miner_uids]
+
     async def predict_grid_temperature(self, request: Request):
         self.authorize_token(request.headers)
         bt.logging.info("[PROXY] Received an organic request!")
-        # Finding some miners
-        metagraph = self.validator.metagraph
-        miner_uids = self.validator.last_responding_miner_uids
-        if len(miner_uids) == 0:
-            bt.logging.warning(
-                "[PROXY] No recent miner uids found, sampling random uids"
-            )
-            miner_uids = get_random_uids(
-                self.validator, k=self.validator.config.neuron.sample_size
-            )
 
+        request_start = time.time()
         # catch errors to prevent log spam if API is missused
         try:
             payload = await request.json()
-            lat_start, lat_end = payload.get("lat_start", None), payload.get(
-                "lat_end", None
-            )
-            lon_start, lon_end = payload.get("lon_start", None), payload.get(
-                "lon_end", None
-            )
-            if (
-                lat_start is None
-                or lat_end is None
-                or lon_start is None
-                or lon_end is None
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid request, lat_start, lat_end, lon_start and lon_end are required",
-                )
+            lat_start = payload["lat_start"]
+            lat_end = payload["lat_end"]
+            
+            lon_start = payload["lon_start"]
+            lon_end = payload["lon_end"]
 
             grid = get_grid(lat_start, lat_end, lon_start, lon_end)
+            assert (
+                min(grid.shape[:2]) >= ERA5_AREA_SAMPLE_RANGE[0] and max(grid.shape[:2]) < ERA5_AREA_SAMPLE_RANGE[1]
+            ), f"Area range invalid. With 0.25 degree fidelity, each dimension should be in {ERA5_AREA_SAMPLE_RANGE}"
 
-            # get middle of the grid
-            lat = (lat_start + lat_end) / 2
-            lon = (lon_start + lon_end) / 2
-
-            timezone_name = self.tf.timezone_at(lng=lon, lat=lat)
-            timezone = pytz.timezone(timezone_name)
-            start_timestamp, end_timestamp, predict_hours, timestamps = (
-                await self._handle_time_inputs(payload, timezone)
-            )
+            start_time, end_time, predict_hours = self._parse_time_inputs(payload)
 
             synapse = TimePredictionSynapse(
                 locations=grid.tolist(),
-                start_time=start_timestamp,
-                end_time=end_timestamp,
+                start_time=start_time.timestamp(),
+                end_time=end_time.timestamp(),
                 requested_hours=predict_hours,
             )
 
         except Exception as e:
             bt.logging.info(f"[PROXY] Organic request was invalid.")
-            error_msg = traceback.format_exc()
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid request, parsing failed with error:\n {error_msg}",
+                detail=f"Invalid request, parsing failed with error:\n {traceback.format_exc()}",
             )
 
-        # getting some responses from miners
-        predictions = await self.dendrite(
-            axons=[metagraph.axons[uid] for uid in miner_uids],
+        # getting responses EAGERLY
+        prediction = await self.dendrite(
+            axons=self.get_axons(),
             synapse=synapse,
             deserialize=True,
             timeout=10,
+            filter=partial(
+                is_valid_synapse, 
+                correct_shape=(predict_hours, grid.shape[0], grid.shape[1])
+            )
         )
 
-        bt.logging.info(f"[PROXY] Received {len(predictions)} responses from miners")
-        for prediction in predictions:
-            bt.logging.info(f"[PROXY] Prediction shape: {prediction.shape}")
+        if prediction is None:
+            bt.logging.info(f"[PROXY] Received no valid responses from miners")
+            return HTTPException(status_code=500, detail="No valid response received from miners")
+        
+        bt.logging.info(f"[PROXY] Obtained a valid eager prediction.")
+        return self.format_response(request_start, prediction, grid, start_time, end_time)
 
-        # validating predictions and returning them
-        dummy_output = torch.zeros(predict_hours, grid.shape[0], grid.shape[1])
-        for prediction, uid in zip(predictions, miner_uids):
-            prediction = help_format_miner_output(dummy_output, prediction)
-            penalty = compute_penalty(dummy_output, prediction)
-            if penalty > 0:
-                # if there is a penalty, we skip this prediction
-                continue
-
-            bt.logging.info(f"[PROXY] Obtained a valid prediction from miner {uid}")
-            return {
-                "prediction": prediction.tolist(),
-                "grid": grid.tolist(),
-                "timestamps": timestamps,
-            }
-
-        return HTTPException(status_code=500, detail="No valid response received")
 
     async def predict_point_temperature(self, request: Request):
         self.authorize_token(request.headers)
         bt.logging.info("[PROXY] Received an organic request!")
-        # Finding some miners
-        metagraph = self.validator.metagraph
-        miner_uids = self.validator.last_responding_miner_uids
-        if len(miner_uids) == 0:
-            bt.logging.warning(
-                "[PROXY] No recent miner uids found, sampling random uids"
-            )
-            miner_uids = get_random_uids(
-                self.validator, k=self.validator.config.neuron.sample_size
-            )
+
+        request_start = time.time()
 
         # catch errors to prevent log spam if API is missused
         try:
             payload = await request.json()
-            lat, lon = payload.get("lat", None), payload.get("lon", None)
-            if lat is None or lon is None:
-                raise HTTPException(
-                    status_code=400, detail="Invalid request, lat and lon are required"
-                )
+            lat = payload["lat"]
+            lon = payload["lon"]
 
-            grid = get_closest_grid_points(lat, lon)
+            grid = expand_to_grid(lat, lon)
 
-            timezone_name = self.tf.timezone_at(lng=lon, lat=lat)
-            timezone = pytz.timezone(timezone_name)
-            start_timestamp, end_timestamp, predict_hours, timestamps = (
-                await self._handle_time_inputs(payload, timezone)
-            )
+            start_time, end_time, predict_hours = self._parse_time_inputs(payload)
 
             synapse = TimePredictionSynapse(
                 locations=grid.tolist(),
-                start_time=start_timestamp,
-                end_time=end_timestamp,
+                start_time=start_time.timestamp(),
+                end_time=end_time.timestamp(),
                 requested_hours=predict_hours,
             )
 
         except Exception as e:
             bt.logging.info(f"[PROXY] Organic request was invalid.")
-            bt.logging.info(f"Error: {e}")
-            error_msg = traceback.format_exc()
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid request, parsing failed with error:\n {error_msg}",
+                detail=f"Invalid request, parsing failed with error:\n {traceback.format_exc()}",
             )
 
-        # getting some responses from miners
-        bt.logging.info(f"[PROXY] Querying {len(miner_uids)} miners...")
-        predictions = await self.dendrite(
-            axons=[metagraph.axons[uid] for uid in miner_uids],
+        # getting responses EAGERLY
+        prediction = await self.dendrite(
+            axons=self.get_axons(),
             synapse=synapse,
             deserialize=True,
             timeout=10,
+            filter=partial(
+                is_valid_synapse, 
+                correct_shape=(predict_hours, grid.shape[0], grid.shape[1])
+            )
         )
 
-        bt.logging.info(f"[PROXY] Received {len(predictions)} responses from miners")
-        for prediction in predictions:
-            bt.logging.info(f"[PROXY] Prediction shape: {prediction.shape}")
+        if prediction is None:
+            bt.logging.info(f"[PROXY] Received no valid responses from miners")
+            return HTTPException(status_code=500, detail="No valid response received")
+        
+        bt.logging.info(f"[PROXY] Obtained a valid eager prediction.")
 
-        dummy_output = torch.zeros(predict_hours, grid.shape[0], grid.shape[1])
-        for prediction, uid in zip(predictions, miner_uids):
-            prediction = help_format_miner_output(dummy_output, prediction)
-            penalty = compute_penalty(dummy_output, prediction)
-            if penalty > 0:
-                continue
+        prediction = interp_coordinates(prediction, grid, lat, lon)
+        expanded_loc = torch.tensor([lat, lon])[None, None, :]
+        return self.format_response(request_start, prediction, expanded_loc, start_time, end_time)
 
-            prediction_shape = prediction.shape
-            return await self._interpolate_prediction(
-                prediction, prediction_shape, grid, lat, lon, timestamps
-            )
 
-        return HTTPException(status_code=500, detail="No valid response received")
+    def _parse_time_inputs(self, payload):
+        start_time = payload.get("start_time", get_today("h"))
+        if isinstance(start_time, str):
+            start_time = pd.Timestamp(start_time).floor("h").replace(tzinfo=None)
 
-    async def _handle_time_inputs(self, payload, timezone):
-        start_timestamp_input = payload.get("start_timestamp", None)
-        end_timestamp_input = payload.get("end_timestamp", None)
-        predict_hours_input = payload.get("predict_hours", None)
+        predict_hours = payload.get("predict_hours", None)
 
-        now = datetime.now()
-        current_hour = now.replace(minute=0, second=0, microsecond=0)
+        end_time = payload.get("end_time", start_time + pd.Timedelta(hours=(predict_hours or 24) - 1))
+        if isinstance(end_time, str):
+           end_time = pd.Timestamp(end_time).floor("h").replace(tzinfo=None)
 
-        if (
-            start_timestamp_input is None
-            and end_timestamp_input is None
-            and predict_hours_input is not None
-        ):
-            predict_hours = int(predict_hours_input)
-            start_timestamp = current_hour
-            end_timestamp = start_timestamp + timedelta(hours=predict_hours)
+        if predict_hours is None:
+            predict_hours = get_hours(start_time, end_time) + 1
 
-        elif (
-            start_timestamp_input is not None
-            and end_timestamp_input is None
-            and predict_hours_input is None
-        ):
-            start_timestamp = datetime.fromtimestamp(start_timestamp_input)
-            end_timestamp = start_timestamp + timedelta(hours=24)
-            predict_hours = 24
+        assert (
+            (end_time - start_time) / pd.Timedelta(hours=1) + 1 == predict_hours
+        ), "The difference between start and end timestamps does not match predict_hours."
 
-        elif (
-            start_timestamp_input is not None
-            and predict_hours_input is not None
-            and end_timestamp_input is None
-        ):
-            start_timestamp = datetime.fromtimestamp(start_timestamp_input)
-            predict_hours = int(predict_hours_input)
-            end_timestamp = start_timestamp + timedelta(hours=predict_hours)
+        assert (
+            isinstance(predict_hours, int) and predict_hours > 0 and predict_hours <= 24 
+        ), "Prediction hours needs to be an integer between 1 and 24."
 
-        elif (
-            start_timestamp_input is not None
-            and end_timestamp_input is not None
-            and predict_hours_input is None
-        ):
-            start_timestamp = datetime.fromtimestamp(start_timestamp_input)
-            end_timestamp = datetime.fromtimestamp(end_timestamp_input)
-            predict_hours = int(
-                (end_timestamp - start_timestamp).total_seconds() // 3600
-            )
+        start_offset = get_hours(get_today("h"), start_time)
+        assert (
+            start_offset >= ERA5_START_OFFSET_RANGE[0] and start_offset < ERA5_START_OFFSET_RANGE[1]
+        ), "You start time can only be between 5 days in the past up to 7 days in the future"
+    
+        return start_time, end_time, int(predict_hours)
+    
 
-        elif (
-            start_timestamp_input is not None
-            and end_timestamp_input is not None
-            and predict_hours_input is not None
-        ):
-            start_timestamp = datetime.fromtimestamp(start_timestamp_input)
-            end_timestamp = datetime.fromtimestamp(end_timestamp_input)
-            predict_hours = int(predict_hours_input)
-
-            if (
-                int((end_timestamp - start_timestamp).total_seconds() // 3600)
-                != predict_hours
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="The difference between start and end timestamps does not match predict_hours.",
-                )
-
-        else:
-            start_timestamp = current_hour
-            end_timestamp = start_timestamp + timedelta(hours=24)
-            predict_hours = 24
-
-        start_timestamp_float = start_timestamp.timestamp()
-        end_timestamp_float = end_timestamp.timestamp()
-
-        # TODO: converting back and forward between timestamps and strings is not ideal
-        timestamps = (
-            pd.date_range(
-                start=datetime.fromtimestamp(start_timestamp_float, tz=timezone),
-                end=datetime.fromtimestamp(end_timestamp_float, tz=timezone),
-                freq="h",
-                tz=timezone,
-            )
-            .to_pydatetime()
-            .tolist()[1:]
+    def format_response(
+            self, 
+            generation_start: float, 
+            prediction: torch.Tensor, 
+            location_grid: torch.Tensor,
+            start_time: pd.Timestamp,
+            end_time: pd.Timestamp,
+    ) -> Dict[str, Any]:
+        timestamps = pd.date_range(
+            start_time.tz_localize("GMT+0"), 
+            end_time.tz_localize("GMT+0"),
+            freq="h"
         )
-        timestamps = [timestamp.strftime("%Y-%m-%dT%H:%M") for timestamp in timestamps]
+        
+        tz_info = [
+            [
+                self.timezone_finder.timezone_at(lng=lon, lat=lat)
+                for lat, lon in lat_row
+            ] 
+            for lat_row in location_grid
+        ]
 
-        if len(timestamps) != predict_hours:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid request, timestamps do not match predict_hours",
-            )
-
-        return start_timestamp_float, end_timestamp_float, predict_hours, timestamps
-
-    async def _interpolate_prediction(
-        self, prediction, prediction_shape, grid, lat, lon, timestamps
-    ):
-        if prediction_shape[1] == 1 and prediction_shape[2] == 1:
-            prediction = prediction.squeeze(1).squeeze(1)
-
-        elif prediction_shape[1] == 2 and prediction_shape[2] == 1:
-            # Linear interpolation on latitude
-            lat_grid = [grid[i, 0][0].item() for i in range(2)]
-
-            lat_diff = lat_grid[1] - lat_grid[0]
-            if abs(lat_diff) < 1e-9:  # Check for near-zero difference
-                lat_weight = 0.5  # Default to equal weights if grid points are close
-            else:
-                lat_weight = (lat - lat_grid[0]) / lat_diff
-
-            weights = (
-                torch.tensor([1 - lat_weight, lat_weight]).unsqueeze(0).unsqueeze(2)
-            )
-            prediction = prediction * weights
-            prediction = prediction.sum(dim=1).squeeze(1)
-
-        elif prediction_shape[1] == 1 and prediction_shape[2] == 2:
-            # Linear interpolation on longitude
-            lon_grid = [grid[0, i][1].item() for i in range(2)]
-
-            lon_diff = lon_grid[1] - lon_grid[0]
-            if abs(lon_diff) < 1e-9:  # Check for near-zero difference
-                lon_weight = 0.5  # Default to equal weights if grid points are close
-            else:
-                lon_weight = (lon - lon_grid[0]) / lon_diff
-
-            weights = (
-                torch.tensor([1 - lon_weight, lon_weight]).unsqueeze(0).unsqueeze(1)
-            )
-            prediction = prediction * weights
-            prediction = prediction.sum(dim=2).squeeze(1)
-
-        elif prediction_shape[1] == 2 and prediction_shape[2] == 2:
-            # Bilinear interpolation
-            lat_grid = [grid[i, 0][0].item() for i in range(2)]
-            lon_grid = [grid[0, i][1].item() for i in range(2)]
-
-            lat_diff = lat_grid[1] - lat_grid[0]
-            lon_diff = lon_grid[1] - lon_grid[0]
-
-            if abs(lat_diff) < 1e-9:
-                lat_weight = 0.5
-            else:
-                lat_weight = (lat - lat_grid[0]) / lat_diff
-
-            if abs(lon_diff) < 1e-9:
-                lon_weight = 0.5
-            else:
-                lon_weight = (lon - lon_grid[0]) / lon_diff
-
-            weights = torch.tensor(
+        time_data = [
+            [
                 [
-                    [
-                        (1 - lat_weight) * (1 - lon_weight),
-                        (1 - lat_weight) * lon_weight,
-                    ],
-                    [lat_weight * (1 - lon_weight), lat_weight * lon_weight],
-                ]
-            ).unsqueeze(0)
-
-            weights = weights.expand(prediction.shape[0], 2, 2)
-            prediction = prediction * weights
-            prediction = prediction.sum(dim=1).sum(dim=1)
-
-        else:
-            logging.error(f"Invalid prediction shape: {prediction_shape}")
-            raise HTTPException(status_code=500, detail="Invalid prediction shape")
+                    str(safe_tz_convert(timestamp, tz))
+                    for tz in row
+                ] 
+                for row in tz_info
+            ]
+            for timestamp in timestamps
+        ]
 
         return {
-            "prediction": prediction.tolist(),
-            "grid": grid.tolist(),
-            "timestamps": timestamps,
-        }
+                "generation_time": time.time() - generation_start,
+                "grid": location_grid.tolist(),
+                "2m_temperature": {
+                    "data": prediction.tolist(),
+                    "unit": "K"
+                },
+                "time": {
+                    "data": time_data,
+                    "unit": "ISO 8601 (tz-aware)"
+                }
+            }
+    
+def is_valid_synapse(response: torch.Tensor, correct_shape: Tuple[int]) -> bool:
+    dummy_output = torch.zeros(*correct_shape)
+    prediction = help_format_miner_output(dummy_output, response)
+    penalty = compute_penalty(dummy_output, prediction)
 
-    async def get_self(self):
-        return self
+    return penalty == 0

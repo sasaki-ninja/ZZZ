@@ -279,7 +279,7 @@ class BaseValidatorNeuron(BaseNeuron):
             netuid=self.config.netuid,
             uids=uint_uids,
             weights=uint_weights,
-            wait_for_finalization=False,
+            wait_for_finalization=True, # make potential issues visible
             wait_for_inclusion=False,
             version_key=self.spec_version,
         )
@@ -362,10 +362,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Update scores with rewards produced by this step.
         alpha: float = self.config.neuron.moving_average_alpha
-
-        bt.logging.info(f"Old moving avg scores: {self.scores}")
         self.scores: np.ndarray = alpha * scattered_rewards + (1 - alpha) * self.scores
-        bt.logging.info(f"New moving avg scores: {self.scores}")
         np.save(self.score_history_path, self.scores)
 
     def save_state(self):

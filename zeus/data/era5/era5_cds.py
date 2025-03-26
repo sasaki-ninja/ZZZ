@@ -20,8 +20,8 @@ from zeus.validator.constants import (
     ERA5_CACHE_DIR,
     COPERNICUS_ERA5_URL,
     ERA5_START_SAMPLE_STD,
+    ERA5_UNIFORM_START_OFFSET_PROB
 )
-
 
 class Era5CDSLoader(Era5BaseLoader):
 
@@ -29,8 +29,10 @@ class Era5CDSLoader(Era5BaseLoader):
 
     def __init__(
         self,
-        validator_config: bt.Config,
         cache_dir: Path = ERA5_CACHE_DIR,
+        copernicus_url: str = COPERNICUS_ERA5_URL,
+        start_sample_std: float = ERA5_START_SAMPLE_STD,
+        uniform_start_prob: float = ERA5_UNIFORM_START_OFFSET_PROB,
         **kwargs,
     ) -> None:
         load_dotenv(
@@ -40,13 +42,16 @@ class Era5CDSLoader(Era5BaseLoader):
         )
         self.cds_api_key = os.getenv("CDS_API_KEY")
         self.client = cdsapi.Client(
-            url=COPERNICUS_ERA5_URL, key=self.cds_api_key, quiet=True, progress=False
+            url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False
         )
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir: Path = cache_dir
         self.last_stored_timestamp: pd.Timestamp = pd.Timestamp(0)
         self.updater_running = False
+
+        self.start_sample_std = start_sample_std
+        self.uniform_start_prob = uniform_start_prob
 
         super().__init__(**kwargs)
 
@@ -83,15 +88,19 @@ class Era5CDSLoader(Era5BaseLoader):
         """
         num_predict_hours = np.random.randint(*self.predict_sample_range)
 
-        # see visualisation in whitepaper for an elaborate explanation: basically make it more likely to sample beginning of time_sample_range
-        start_offset = min(
-            0,  # never skip a part of the future
-            np.abs(int(np.random.normal(0, ERA5_START_SAMPLE_STD)))
-            + self.min_start_offset_hours,
-        )
+         # see visualisation at Zeus/static/era5_start_offset_distribution.png
+        if np.random.rand() > self.uniform_start_prob:
+            start_offset = min(
+                self.start_offset_range[1], # don't overshoot
+                np.abs(
+                    int(np.random.normal(0, self.start_sample_std))
+                ) + self.start_offset_range[0]
+            )
+        else:
+            start_offset = int(np.random.uniform(*self.start_offset_range))
 
         start_timestamp = get_today("h") + pd.Timedelta(hours=start_offset)
-        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
+        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours - 1)
 
         return start_timestamp, end_timestamp, num_predict_hours
 
@@ -120,10 +129,9 @@ class Era5CDSLoader(Era5BaseLoader):
         if end_time > self.last_stored_timestamp:
             return None
 
-        start_time = end_time - pd.Timedelta(hours=sample.predict_hours - 1)
         data4d: torch.Tensor = self.get_data(
             *sample.get_bbox(),
-            start_time=start_time,
+            start_time=get_timestamp(sample.start_timestamp),
             end_time=end_time,
         )
         # Slice off the latitude and longitude for the output
