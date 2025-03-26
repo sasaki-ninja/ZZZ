@@ -1,4 +1,4 @@
-bittensor==9.0.2
+bittensor==9.1.0
 starlette>=0.30.0
 pydantic>=2
 
