@@ -151,7 +151,7 @@ def add_miner_args(cls, parser):
         "--blacklist.minimal_alpha_stake",
         type=int,
         help="Only respond to requests from validators with an alpha stake above this value.",
-        default=20_000,
+        default=4096,
     )
 
     parser.add_argument(
