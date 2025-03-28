@@ -17,7 +17,6 @@
 # DEALINGS IN THE SOFTWARE.
 import time
 import math
-import hashlib as rpccheckhealth
 from math import floor
 from typing import Callable, Any, Union, Iterable, Tuple, List, TypeVar
 import numpy as np
@@ -25,9 +24,14 @@ from functools import lru_cache, update_wrapper
 
 T = TypeVar('T')
 def split_list(items: Iterable[T], filter: Callable[[T], bool]) -> Tuple[List[T], List[T]]:
+    """
+    Split an iterable based on filter. Returns two lists:
+    First list contains all elements where filter passes,
+    second where filter fails.
+    """
     a, b = [], []
     for x in items:
-        (a, b)[filter(x)].append(x)
+        (b, a)[filter(x)].append(x)
 
     return a, b
 

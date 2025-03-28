@@ -96,7 +96,7 @@ async def forward(self):
     )
     miners_data = get_scored_miners(self, sample, miner_hotkeys, responses)
     # Identify miners who should receive a penalty
-    good_miners, bad_miners = split_list(miners_data, lambda m: m.metrics["penalty"] == 0.0)
+    good_miners, bad_miners = split_list(miners_data, lambda m: m.penalty == 0.0)
 
     if len(bad_miners) > 0:
         uids = [miner.uid for miner in bad_miners]
@@ -142,7 +142,7 @@ def complete_challenge(
 
     for miner in miners_data:
         bt.logging.success(
-            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward}"
+            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.penalty}"
         )
     do_wandb_logging(self, sample, miners_data)
 

@@ -19,7 +19,6 @@
 from typing import List, Tuple, Dict
 import numpy as np
 import torch
-import bittensor as bt
 from zeus.validator.miner_data import MinerData
 from zeus.validator.constants import REWARD_DIFFICULTY_SCALER
 
@@ -39,18 +38,21 @@ def help_format_miner_output(
     """
     if correct.shape == response.shape:
         return response
+    
+    try:
+        if response.shape[0] + 1 == correct.shape[0]:
+            # NOTE: temporary v0.1.1 -> v0.2.0 since end_timestamp is now included
+            # so repeat last hour if miner is still running old code
+            response = torch.cat((response, response[-1:]))
 
-    if correct.ndim + 1 == response.ndim and response.shape[-1] == 1:
-        # miner forgot to squeeze.
-        return response.squeeze()
-
-    if (
-        correct.shape[:-1] == response.shape[:-1]
-        and (correct.shape[-1] + 2) == response.shape[-1]
-    ):
-        # miner included latitude and longitude, slice those off
-        return response[..., 2:]
-    return response
+        if response.ndim - 1 == correct.ndim and response.shape[-1] == 1:
+            # miner forgot to squeeze.
+            response = response.squeeze(-1)
+        
+        return response
+    except IndexError:
+        # if miner's output is so wrong we cannot even index, do not try anymore
+        return response
 
 
 def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
@@ -101,10 +103,8 @@ def set_rewards(
         else:
             rmse = -1.0  # Using -1.0 to indicate penalty.
 
-        miner_data._metrics.update({
-            "penalty": penalty,
-            "RMSE": rmse,
-        })
+        miner_data.penalty = penalty
+        miner_data._metrics.update({"RMSE": rmse})
 
     if not rmse_values:
         for miner_data in miners_data:
