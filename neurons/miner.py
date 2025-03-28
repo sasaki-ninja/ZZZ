@@ -149,6 +149,13 @@ class Miner(BaseMinerNeuron):
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
                 return True, "Non-validator hotkey"
+            
+        if self.metagraph.S[uid] < self.config.blacklist.minimal_alpha_stake:
+            # require true validators to have at least minimal alpha stake.
+            bt.logging.warning(
+                f"Blacklisting a request from hotkey {synapse.dendrite.hotkey} with only {self.metagraph.S[uid]} stake."
+            )
+            return True, "Non-validator hotkey"
 
         bt.logging.trace(
             f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"

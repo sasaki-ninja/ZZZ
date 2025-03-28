@@ -148,6 +148,13 @@ def add_miner_args(cls, parser):
     )
 
     parser.add_argument(
+        "--blacklist.minimal_alpha_stake",
+        type=int,
+        help="Only respond to requests from validators with an alpha stake above this value.",
+        default=20_000,
+    )
+
+    parser.add_argument(
         "--blacklist.allow_non_registered",
         action="store_true",
         help="If set, miners will accept queries from non registered entities. (Dangerous!)",
