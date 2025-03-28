@@ -3,6 +3,7 @@ import torch
 
 from zeus.utils.coordinates import get_bbox, get_grid
 from zeus.protocol import TimePredictionSynapse
+from zeus import __version__ as zeus_version
 
 
 class Era5Sample:
@@ -66,6 +67,7 @@ class Era5Sample:
         Note that the output data is NOT set in this synapse.
         """
         return TimePredictionSynapse(
+            version=zeus_version,
             locations=self.x_grid.tolist(),
             start_time=self.start_timestamp,
             end_time=self.end_timestamp,
