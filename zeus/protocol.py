@@ -48,12 +48,14 @@ class TimePredictionSynapse(bt.Synapse):
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling request and response communication between
     the miner and the validator.
-
-    Attributes:
-    - input_data: The numpy tensor to be used as input for enviromental prediction.
-    - requested_hours: Number of output hours the miners should return.
-    - predictions: The output tensor to be scored. Needs a value for each requested hour AND for each latitude and longitude in the input.
     """
+
+    version: str = Field(
+        title="Validator/Miner codebase version",
+        description="Version matches the version-string of the SENDER, either validator or miner",
+        default = "",
+        frozen = False,
+    )
 
     # Required request input, filled by sending dendrite caller.
     locations: List[List[Tuple[float, float]]] = Field(

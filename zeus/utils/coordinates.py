@@ -1,6 +1,9 @@
 from typing import Tuple, Union, List
 import numpy as np
+import math
+from check_shapes import check_shapes
 import torch
+import torch.nn.functional as F
 
 
 def bbox_to_str(bbox: Tuple[Union[float, np.number]]) -> str:
@@ -71,44 +74,44 @@ def get_grid(
     )  # (lat, lon, 2)
 
 
-def get_closest_grid_points(
-    lat: float, lon: float, fidelity: float = 0.25
+def expand_to_grid(
+    lat: float, lon: float, fidelity: float = 4
 ) -> torch.Tensor:
     """
-    Get the closest grid of lat-lon points for a single location based on the specified fidelity (degree).
+    Get a grid of lat-lon points for a single location based on the specified fidelity (degree).
+    If the specified lat or lon coordinate are exactly on a grid point that dimension will be 3,
+    otherwise it will be 2.
     The output grid will have the same shape structure as the get_grid function.
     """
-    lat_remainder = lat % fidelity
-    lon_remainder = lon % fidelity
+    lat_start = math.floor(lat * fidelity) / fidelity
+    lat_end = math.ceil(lat * fidelity) / fidelity
 
-    lat_points = []
-    lon_points = []
+    if lat_start == lat_end:
+        lat_start -= 1 / fidelity
+        lat_end += 1 / fidelity
 
-    if lat_remainder == 0:
-        lat_points.append(lat)
-    else:
-        lat_points.extend([lat - lat_remainder, lat - lat_remainder + fidelity])
+    lon_start = math.floor(lon * fidelity) / fidelity
+    lon_end = math.ceil(lon * fidelity) / fidelity
 
-    if lon_remainder == 0:
-        lon_points.append(lon)
-    else:
-        lon_points.extend([lon - lon_remainder, lon - lon_remainder + fidelity])
+    if lon_start == lon_end:
+        lon_start -= 1 / fidelity
+        lon_end += 1 / fidelity
 
-    lat_tensor = torch.tensor(lat_points)
-    lon_tensor = torch.tensor(lon_points)
+    return get_grid(lat_start, lat_end, lon_start, lon_end, fidelity)
 
-    lat_start = lat_tensor.min().item()
-    lat_end = lat_tensor.max().item()
-    lon_start = lon_tensor.min().item()
-    lon_end = lon_tensor.max().item()
+@check_shapes(
+    "input: [time, lat, lon]",
+    "grid: [lat, lon, 2]",
+    "return: [time, 1, 1]",
+)
+def interp_coordinates(
+        input: torch.Tensor,
+        grid: torch.Tensor,
+        to_lat: float,
+        to_lon: float,
+) -> torch.Tensor:
+    coords = torch.tensor([to_lat, to_lon])
+    interp_grid = (coords - grid[0,0]) / (grid[-1,-1] - grid[0, 0])
+    interp_grid = (interp_grid * 2 - 1).repeat(input.size(0), 1, 1, 1) # time, 1, 1, 2
 
-    return torch.stack(
-        torch.meshgrid(
-            *[
-                torch.linspace(start, end, int((end - start) / fidelity) + 1)
-                for start, end in [(lat_start, lat_end), (lon_start, lon_end)]
-            ],
-            indexing="ij",
-        ),
-        dim=-1,
-    )
+    return F.grid_sample(input.unsqueeze(1), grid=interp_grid,align_corners=True).squeeze(-1)

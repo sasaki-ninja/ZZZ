@@ -19,9 +19,8 @@
 from typing import List, Tuple, Dict
 import numpy as np
 import torch
-import bittensor as bt
 from zeus.validator.miner_data import MinerData
-from zeus.validator.constants import DIFFICULTY_OFFSET, DIFFICULTY_MULTIPLIER
+from zeus.validator.constants import REWARD_DIFFICULTY_SCALER
 
 
 def help_format_miner_output(
@@ -39,18 +38,21 @@ def help_format_miner_output(
     """
     if correct.shape == response.shape:
         return response
+    
+    try:
+        if response.shape[0] + 1 == correct.shape[0]:
+            # NOTE: temporary v0.1.1 -> v0.2.0 since end_timestamp is now included
+            # so repeat last hour if miner is still running old code
+            response = torch.cat((response, response[-1:]))
 
-    if correct.ndim + 1 == response.ndim and response.shape[-1] == 1:
-        # miner forgot to squeeze.
-        return response.squeeze()
-
-    if (
-        correct.shape[:-1] == response.shape[:-1]
-        and (correct.shape[-1] + 2) == response.shape[-1]
-    ):
-        # miner included latitude and longitude, slice those off
-        return response[..., 2:]
-    return response
+        if response.ndim - 1 == correct.ndim and response.shape[-1] == 1:
+            # miner forgot to squeeze.
+            response = response.squeeze(-1)
+        
+        return response
+    except IndexError:
+        # if miner's output is so wrong we cannot even index, do not try anymore
+        return response
 
 
 def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
@@ -73,7 +75,7 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
     return 0.0 if valid else 1.0
 
 
-def get_rewards(
+def set_rewards(
     output_data: torch.Tensor,
     miners_data: List[MinerData],
     difficulty_grid: np.ndarray,
@@ -101,31 +103,28 @@ def get_rewards(
         else:
             rmse = -1.0  # Using -1.0 to indicate penalty.
 
-        miner_data.metrics = {
-            "penalty": penalty,
-            "RMSE": rmse,
-        }
+        miner_data.penalty = penalty
+        miner_data._metrics.update({"RMSE": rmse})
 
     if not rmse_values:
         for miner_data in miners_data:
-            miner_data.metrics["score"] = 0.0
             miner_data.reward = 0.0
         return miners_data
 
     min_rmse = min(rmse_values)
     max_rmse = max(rmse_values)
 
+    avg_difficulty = difficulty_grid.mean()
+    # make difficulty [-1, 1], then go between [1/scaler, scaler]
+    gamma = np.power(REWARD_DIFFICULTY_SCALER, avg_difficulty * 2 - 1)
+
     for miner_data in miners_data:
         if miner_data.metrics["RMSE"] == -1.0:
-            miner_data.metrics["score"] = 0.0
+            miner_data.reward = 0.0
         else:
             if max_rmse == min_rmse:
-                miner_data.metrics["score"] = 1.0
+                miner_data.reward = 1.0
             else:
-                miner_data.metrics["score"] = (
-                    max_rmse - miner_data.metrics["RMSE"]
-                ) / (max_rmse - min_rmse)
-
-        miner_data.reward = miner_data.metrics["score"]
-
+                norm_rmse = (max_rmse - miner_data.metrics["RMSE"]) / (max_rmse - min_rmse)
+                miner_data.reward = np.power(norm_rmse, gamma) # apply gamma correction
     return miners_data

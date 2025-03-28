@@ -17,11 +17,25 @@
 # DEALINGS IN THE SOFTWARE.
 import time
 import math
-import hashlib as rpccheckhealth
 from math import floor
-from typing import Callable, Any, Union
+from typing import Callable, Any, Union, Iterable, Tuple, List, TypeVar
 import numpy as np
 from functools import lru_cache, update_wrapper
+
+from zeus import __version__ as zeus_version
+
+T = TypeVar('T')
+def split_list(items: Iterable[T], filter: Callable[[T], bool]) -> Tuple[List[T], List[T]]:
+    """
+    Split an iterable based on filter. Returns two lists:
+    First list contains all elements where filter passes,
+    second where filter fails.
+    """
+    a, b = [], []
+    for x in items:
+        (b, a)[filter(x)].append(x)
+
+    return a, b
 
 
 def celcius_to_kelvin(data: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -31,6 +45,16 @@ def celcius_to_kelvin(data: Union[float, np.ndarray]) -> Union[float, np.ndarray
 def kelvin_to_celcius(data: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     return data - 273.15
 
+def is_updated(version_str: str) -> bool:
+    """
+    Return if the incoming version string is at least equal to our version
+    """
+    try:
+        our_version = map(int, zeus_version.split("."))
+        incoming_version = map(int, version_str.split("."))
+        return tuple(incoming_version) >= tuple(our_version)
+    except:
+        return False
 
 # LRU Cache with TTL
 def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):

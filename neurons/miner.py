@@ -25,11 +25,12 @@ import bittensor as bt
 import openmeteo_requests
 
 import numpy as np
-from zeus.utils.misc import celcius_to_kelvin
+from zeus.utils.misc import celcius_to_kelvin, is_updated
 from zeus.utils.config import get_device_str
 from zeus.utils.time import get_timestamp
 from zeus.protocol import TimePredictionSynapse
 from zeus.base.miner import BaseMinerNeuron
+from zeus import __version__ as zeus_version
 
 
 class Miner(BaseMinerNeuron):
@@ -85,15 +86,17 @@ class Miner(BaseMinerNeuron):
         output = np.stack(
             [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses], axis=1
         ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
-        output = celcius_to_kelvin(
-            output
-        )  # OpenMeteo does Celcius, scoring is based on Kelvin
+        # OpenMeteo does Celcius, scoring is based on Kelvin
+        output = celcius_to_kelvin(output)
 
-        # OpenMeteo always does full days, so slice off any hours that weren't part of the range.
-        output = output[start_time.hour : (-24 + end_time.hour)]
+        # OpenMeteo returns full days, so slice, make sure end hour is included only for up-to-date validators.
+        end_bound = 23 if is_updated(synapse.version) else 24
+        output = output[start_time.hour : (-end_bound + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
         synapse.predictions = output.tolist()
+        synapse.version = zeus_version
+
         return synapse
 
     async def blacklist(
@@ -150,6 +153,13 @@ class Miner(BaseMinerNeuron):
                     f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
                 return True, "Non-validator hotkey"
+            
+        if self.metagraph.S[uid] < self.config.blacklist.minimal_alpha_stake:
+            # require true validators to have at least minimal alpha stake.
+            bt.logging.warning(
+                f"Blacklisting a request from hotkey {synapse.dendrite.hotkey} with only {self.metagraph.S[uid]} stake."
+            )
+            return True, "Non-validator hotkey"
 
         bt.logging.trace(
             f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
