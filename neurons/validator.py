@@ -19,6 +19,8 @@
 
 
 import time
+import os
+import signal
 
 import bittensor as bt
 import wandb
@@ -70,6 +72,10 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         return await forward(self)
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        super().__exit__(exc_type, exc_value, traceback)
+        # TODO also stop the proxy, so PM2 can restart properly
 
     def init_wandb(self):
         if self.config.wandb.off:
@@ -92,20 +98,6 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(
             f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'"
         )
-        run_id = None
-        try:
-            # Check if the run already exists for this validator so we can continue it
-            runs = wandb.Api().runs(
-                f"{self.config.wandb.entity}/{wandb_project}",
-                filters={"display_name": run_name, "config.hotkey": self.config.hotkey},
-                order="-created_at",
-            )
-            if len(runs) > 0:
-                run_id = runs[0].id
-        except Exception as e:
-            bt.logging.warning(e)
-            bt.logging.warning("Failed to fetch previous runs. Starting a new run.")
-
         try:
             run_id = wandb.init(
                 name=run_name,
@@ -113,9 +105,6 @@ class Validator(BaseValidatorNeuron):
                 entity=self.config.wandb.entity,
                 config=self.config,
                 dir=self.config.full_path,
-                reinit=True,
-                resume="allow",
-                id=run_id,
             ).id
         except wandb.UsageError as e:
             bt.logging.warning(e)
@@ -135,4 +124,6 @@ if __name__ == "__main__":
     with Validator() as validator:
         while True:
             bt.logging.info(f"Validator running... {time.time()}")
-            time.sleep(20)
+            time.sleep(5)
+            if validator.should_exit:
+                break

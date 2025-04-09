@@ -55,7 +55,7 @@ def help_format_miner_output(
         return response
 
 
-def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
+def get_shape_penalty(correct: torch.Tensor, response: torch.Tensor) -> bool:
     """
     Compute penalty for predictions that are incorrectly shaped or contains NaN/infinities.
 
@@ -64,15 +64,15 @@ def compute_penalty(correct: torch.Tensor, response: torch.Tensor) -> float:
         response (torch.Tensor): The response tensor from the miner.
 
     Returns:
-        float: 0.0 if prediction is valid, 1.0 if invalid
+        float: True if there is a shape penalty, False otherwise
     """
-    valid = True
+    penalty = False
     if response.shape != correct.shape:
-        valid = False
+        penalty = True
     elif not torch.isfinite(response).all():
-        valid = False
+        penalty = True
 
-    return 0.0 if valid else 1.0
+    return penalty
 
 
 def set_rewards(
@@ -93,19 +93,21 @@ def set_rewards(
     """
     rmse_values = []
 
+    # compute unnormalised scores and penalties
     for miner_data in miners_data:
         prediction = help_format_miner_output(output_data, miner_data.prediction)
-        penalty = compute_penalty(output_data, prediction)
+        shape_penalty = get_shape_penalty(output_data, prediction)
 
-        if penalty == 0.0:
+        if shape_penalty:
+            rmse = -1.0  # Using -1.0 to indicate penalty.
+        else:
             rmse = torch.sqrt(torch.mean((prediction - output_data) ** 2)).item()
             rmse_values.append(rmse)
-        else:
-            rmse = -1.0  # Using -1.0 to indicate penalty.
+       
+        miner_data.shape_penalty = shape_penalty
+        miner_data.rmse = rmse
 
-        miner_data.penalty = penalty
-        miner_data._metrics.update({"RMSE": rmse})
-
+    # if everybody got a shape penalty, set all scores to 0
     if not rmse_values:
         for miner_data in miners_data:
             miner_data.reward = 0.0
@@ -119,12 +121,12 @@ def set_rewards(
     gamma = np.power(REWARD_DIFFICULTY_SCALER, avg_difficulty * 2 - 1)
 
     for miner_data in miners_data:
-        if miner_data.metrics["RMSE"] == -1.0:
+        if miner_data.shape_penalty:
             miner_data.reward = 0.0
         else:
             if max_rmse == min_rmse:
                 miner_data.reward = 1.0
             else:
-                norm_rmse = (max_rmse - miner_data.metrics["RMSE"]) / (max_rmse - min_rmse)
+                norm_rmse = (max_rmse - miner_data.rmse) / (max_rmse - min_rmse)
                 miner_data.reward = np.power(norm_rmse, gamma) # apply gamma correction
     return miners_data

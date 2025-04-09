@@ -22,7 +22,7 @@ from zeus.utils.uids import get_random_uids
 from zeus.validator.constants import (
     MAINNET_UID, ERA5_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
 )
-from zeus.validator.reward import help_format_miner_output, compute_penalty
+from zeus.validator.reward import help_format_miner_output, get_shape_penalty
 from zeus.protocol import TimePredictionSynapse
 from zeus.utils.time import get_timestamp, get_today, get_hours, safe_tz_convert
 from zeus.utils.coordinates import get_grid, expand_to_grid, interp_coordinates
@@ -283,6 +283,4 @@ class ValidatorProxy:
 def is_valid_synapse(response: torch.Tensor, correct_shape: Tuple[int]) -> bool:
     dummy_output = torch.zeros(*correct_shape)
     prediction = help_format_miner_output(dummy_output, response)
-    penalty = compute_penalty(dummy_output, prediction)
-
-    return penalty == 0
+    return not get_shape_penalty(dummy_output, prediction)

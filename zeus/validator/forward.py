@@ -96,7 +96,7 @@ async def forward(self):
     )
     miners_data = get_scored_miners(self, sample, miner_hotkeys, responses)
     # Identify miners who should receive a penalty
-    good_miners, bad_miners = split_list(miners_data, lambda m: m.penalty == 0.0)
+    good_miners, bad_miners = split_list(miners_data, lambda m: not m.shape_penalty)
 
     if len(bad_miners) > 0:
         uids = [miner.uid for miner in bad_miners]
@@ -119,8 +119,7 @@ async def forward(self):
         )
 
     # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
-    time.sleep(FORWARD_DELAY_SECONDS - (time.time() - start))
-
+    time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start)))
 
 def complete_challenge(
     self,
