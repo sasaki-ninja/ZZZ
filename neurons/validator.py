@@ -26,6 +26,7 @@ import bittensor as bt
 import wandb
 
 import zeus
+from zeus.validator.uid_tracker import UIDTracker
 from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
@@ -50,7 +51,7 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
         self.load_state()
 
-        self.last_responding_miner_uids = []
+        self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
 
         #self.google_loader = ERA5GoogleLoader()

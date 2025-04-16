@@ -34,10 +34,11 @@ from zeus.validator.reward import set_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
 from zeus.utils.logging import maybe_reset_wandb
+from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.constants import FORWARD_DELAY_SECONDS, MAINNET_UID
 
 
-async def forward(self):
+async def forward(self: BaseValidatorNeuron):
     """
     The forward function is called by the validator every time step.
 
@@ -70,11 +71,9 @@ async def forward(self):
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
     )
 
-    miner_uids = get_random_uids(
-        self.metagraph,
-        self.config.neuron.sample_size,
-        self.config.neuron.vpermit_tao_limit,
-        MAINNET_UID,
+    miner_uids = self.uid_tracker.get_random_uids(
+        k = self.config.neuron.sample_size,
+        tries = 3
     )
 
     axons = [self.metagraph.axons[uid] for uid in miner_uids]
@@ -101,6 +100,7 @@ async def forward(self):
 
     if len(bad_miners) > 0:
         uids = [miner.uid for miner in bad_miners]
+        self.uid_tracker.mark_finished(uids, good=False)
         bt.logging.success(f"Punishing miners that did not respond immediately: {uids}")
         self.update_scores(
             [miner.reward for miner in bad_miners],
@@ -110,8 +110,7 @@ async def forward(self):
 
     if len(good_miners) > 0:
          # store non-penalty miners for proxy
-        self.last_responding_miner_uids = [m.uid for m in good_miners]
-
+        self.uid_tracker.mark_finished([m.uid for m in good_miners], good=True)
         bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
         self.database.insert(
             sample,
