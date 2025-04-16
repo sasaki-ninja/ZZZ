@@ -186,11 +186,13 @@ def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):
             commit=False,  # All logging should be the same commit
         )
 
+    uid_to_hotkey = {miner.uid: miner.hotkey for miner in miners_data}
     wandb.log(
         {
             "start_timestamp": challenge.start_timestamp,
             "end_timestamp": challenge.end_timestamp,
             "predict_hours": challenge.predict_hours,
             "lat_lon_bbox": challenge.get_bbox(),
+            "uid_to_hotkey": uid_to_hotkey,
         },
     )
