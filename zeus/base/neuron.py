@@ -26,8 +26,6 @@ from abc import ABC, abstractmethod
 from zeus.utils.config import check_config, add_args, config
 from zeus.utils.misc import ttl_get_block
 from zeus import __spec_version__ as spec_version
-from zeus.utils.mock import MockSubtensor, MockMetagraph
-
 
 class BaseNeuron(ABC):
     """
@@ -81,8 +79,8 @@ class BaseNeuron(ABC):
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
             self.wallet = bt.MockWallet(config=self.config)
-            self.subtensor = MockSubtensor(self.config.netuid, wallet=self.wallet)
-            self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
+            # self.subtensor = MockSubtensor(self.config.netuid, wallet=self.wallet)
+            # self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)

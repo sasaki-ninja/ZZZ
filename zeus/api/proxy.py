@@ -65,9 +65,16 @@ class ValidatorProxy:
 
     def start_server(self):
         self.executor = ThreadPoolExecutor(max_workers=1)
-        self.executor.submit(
-            uvicorn.run, self.app, host="0.0.0.0", port=self.validator.config.proxy.port
+        self.server = uvicorn.Server(
+            uvicorn.Config(
+                self.app, host="0.0.0.0", port=self.validator.config.proxy.port
+            )
         )
+        self.executor.submit(self.server.run)
+
+    def stop_server(self):
+        self.server.should_exit = True
+        self.executor.shutdown(wait=True)
 
     def authorize_token(self, headers):
         authorization: str = headers.get("authorization", None)

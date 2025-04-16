@@ -33,6 +33,7 @@ from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import set_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
+from zeus.utils.logging import maybe_reset_wandb
 from zeus.validator.constants import FORWARD_DELAY_SECONDS, MAINNET_UID
 
 
@@ -118,6 +119,8 @@ async def forward(self):
             [miner.prediction for miner in good_miners],
         )
 
+    # prevent W&B logs from becoming massive
+    maybe_reset_wandb(self)
     # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
     time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start)))
 
@@ -191,4 +194,3 @@ def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):
             "lat_lon_bbox": challenge.get_bbox(),
         },
     )
-
