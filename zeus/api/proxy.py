@@ -94,14 +94,14 @@ class ValidatorProxy:
     def get_proxy_uids(self) -> List[int]:
         miner_uids: List[int] = self.validator.uid_tracker.get_responding_uids(PROXY_QUERY_K)
     
-
         if len(miner_uids) < PROXY_QUERY_K:
+            to_sample = PROXY_QUERY_K - len(miner_uids)
             bt.logging.warning(
-                    "[PROXY] Not enough recent miner uids found, sampling additional random uids"
+                    f"[PROXY] Not enough non-busy recent miners found, sampling {to_sample} additional miners"
             )
             miner_uids.extend(
                 self.validator.uid_tracker.get_random_uids(
-                    k = PROXY_QUERY_K - len(miner_uids),
+                    k = to_sample,
                     tries = 2,
                     sleep = 0.2
                 )

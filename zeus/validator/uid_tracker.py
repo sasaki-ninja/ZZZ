@@ -11,7 +11,7 @@ class UIDTracker:
     def __init__(self, validator: BaseValidatorNeuron):
         self.validator = validator
         self._busy_uids = set()
-        self.last_good_uids = set()
+        self._last_good_uids = set()
         self.lock = threading.Lock()
 
     def get_random_uids(self, k: int, tries: int = 3, sleep: int = 1) -> List[int]:
@@ -19,7 +19,7 @@ class UIDTracker:
         while True:
             if attempt > 1:
                  # sleep here so no delay once we sample miners to add them to our busy-list
-                 bt.logging.warning(f"Failed to sample any non-busy miner uids, retrying in {sleep} second(s). ATTEMPT {attempt}/{tries}")
+                 bt.logging.warning(f"Failed to sample enough non-busy miner uids, retrying in {sleep} second(s). ATTEMPT {attempt}/{tries}")
                  time.sleep(sleep)
 
             miner_uids = get_random_uids(
@@ -46,11 +46,13 @@ class UIDTracker:
 
     def mark_finished(self, uids: List[int], good: bool = False):
         with self.lock:
-            self.busy_uids = self.busy_uids - set(uids)
-        if good:
-            self.last_good_uids = uids
+            self._busy_uids = self._busy_uids - set(uids)
+            if good:
+                self._last_good_uids = set(uids)
 
     def get_responding_uids(self, k: int) -> List[int]:
-        responding_uids = list(self.last_good_uids)[:k]
+        with self.lock:
+            self._last_good_uids = self._last_good_uids - self._busy_uids
+        responding_uids = list(self._last_good_uids)[:k]
         self.add_busy_uids(responding_uids)
         return responding_uids

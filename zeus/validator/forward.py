@@ -143,7 +143,7 @@ def complete_challenge(
 
     for miner in miners_data:
         bt.logging.success(
-            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.penalty}"
+            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
         )
     do_wandb_logging(self, sample, miners_data)
 
