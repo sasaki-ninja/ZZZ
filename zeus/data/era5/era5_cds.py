@@ -11,7 +11,6 @@ import torch
 import cdsapi
 import pandas as pd
 import bittensor as bt
-from dotenv import load_dotenv
 
 from zeus.data.era5.era5_base import Era5BaseLoader
 from zeus.data.sample import Era5Sample
@@ -38,15 +37,13 @@ class Era5CDSLoader(Era5BaseLoader):
         start_offset_range: Tuple[int, int] = LIVE_START_OFFSET_RANGE,
         **kwargs,
     ) -> None:
-        load_dotenv(
-            os.path.join(
-                os.path.abspath(os.path.dirname(__file__)), "../../validator.env"
-            )
-        )
+        
         self.cds_api_key = os.getenv("CDS_API_KEY")
         self.client = cdsapi.Client(
-            url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False
+            url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False, warning_callback=lambda _: None,
         )
+        # temporarily muted to remove confusing warning
+        self.client.warning_callback = None
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir: Path = cache_dir

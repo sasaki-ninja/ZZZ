@@ -5,6 +5,7 @@ from check_shapes import check_shapes
 import torch
 import torch.nn.functional as F
 
+from zeus.validator.constants import ERA5_AREA_SAMPLE_RANGE
 
 def bbox_to_str(bbox: Tuple[Union[float, np.number]]) -> str:
     """
@@ -90,12 +91,12 @@ def gaussian_grid_sample(grid: Union[torch.Tensor, np.ndarray], stds_in_radius =
 
 
 def expand_to_grid(
-    lat: float, lon: float, fidelity: float = 4
+    lat: float, lon: float, fidelity: float = 4, min_size = ERA5_AREA_SAMPLE_RANGE[0],
 ) -> torch.Tensor:
     """
     Get a grid of lat-lon points for a single location based on the specified fidelity (degree).
-    If the specified lat or lon coordinate are exactly on a grid point that dimension will be 3,
-    otherwise it will be 2.
+    If the specified lat or lon coordinate are exactly on a grid point that dimension will be min_size + 1,
+    otherwise it will be of min_size.
     The output grid will have the same shape structure as the get_grid function.
     """
     lat_start = math.floor(lat * fidelity) / fidelity
@@ -112,7 +113,12 @@ def expand_to_grid(
         lon_start -= 1 / fidelity
         lon_end += 1 / fidelity
 
-    return get_grid(lat_start, lat_end, lon_start, lon_end, fidelity)
+    expand = max(0, (min_size - 2) // 2) / fidelity
+    return get_grid(
+        lat_start - expand, lat_end + expand, 
+        lon_start - expand, lon_end + expand,
+        fidelity=fidelity
+    )
 
 @check_shapes(
     "input: [time, lat, lon]",

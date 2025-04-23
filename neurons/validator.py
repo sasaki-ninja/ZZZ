@@ -20,10 +20,11 @@
 
 import time
 import os
-import signal
+from discord_webhook import DiscordWebhook, DiscordEmbed
 
 import bittensor as bt
 import wandb
+from dotenv import load_dotenv
 
 import zeus
 from zeus.validator.uid_tracker import UIDTracker
@@ -44,6 +45,11 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
         self.load_state()
+
+        load_dotenv(
+            os.path.join(os.path.abspath(os.path.dirname(__file__)), "../validator.env")
+        )
+        self.discord_hook = os.environ.get("DISCORD_WEBHOOK")
 
         self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
@@ -70,6 +76,27 @@ class Validator(BaseValidatorNeuron):
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
         self.validator_proxy.stop_server()
+
+
+    def on_error(self, error, error_message):
+        super().on_error(error, error_message)
+
+        if not self.discord_hook:
+            return
+        
+        webhook = DiscordWebhook(
+            url=self.discord_hook, 
+            avatar_url="https://raw.githubusercontent.com/Orpheus-AI/Zeus/refs/heads/v1/static/zeus-icon.png",
+            username="Zeus Subnet Bot",
+            content=f"Your validator had an error -- see below!",
+            timeout=5,
+        )
+        embed = DiscordEmbed(title=error, description=error_message)
+        embed.set_timestamp()
+        if wandb.run and not wandb.run.offline:
+            embed.add_embed_field(name="", value=f"[WANDB]({wandb.run.get_url()})", inline=False)
+        webhook.add_embed(embed)
+        webhook.execute()
 
     def init_wandb(self):
         if self.config.wandb.off:

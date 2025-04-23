@@ -13,7 +13,6 @@ import pytz
 import torch
 import uvicorn
 
-from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Depends, Request
 from timezonefinder import TimezoneFinder
@@ -35,9 +34,6 @@ class ValidatorProxy:
         self,
         validator: BaseValidatorNeuron,
     ):
-        load_dotenv(
-            os.path.join(os.path.abspath(os.path.dirname(__file__)), "../validator.env")
-        )
         self.proxy_api_key = os.getenv("PROXY_API_KEY")
         if not self.proxy_api_key or self.proxy_api_key == "":
             bt.logging.warning("[PROXY] No proxy API key has been specified in the validator.env file! " +

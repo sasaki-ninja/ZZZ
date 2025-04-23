@@ -26,6 +26,7 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
+from abc import abstractmethod
 
 from typing import List, Union
 from traceback import print_exception
@@ -57,10 +58,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
-        if self.config.mock:
-            pass
-        else:
-            self.dendrite = bt.dendrite(wallet=self.wallet)
+        self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation
@@ -170,11 +168,18 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.success("Validator killed by keyboard interrupt.")
             exit()
 
-        # In case of unforeseen errors, the validator will log the error and continue operations.
+        # In case of unforeseen errors, the validator will log the error and restart.
         except Exception as err:
-            bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
-            self.should_exit = True            
+            err_message = str(print_exception(type(err), err, err.__traceback__))
+            self.on_error(err, err_message)
+            self.should_exit = True
+
+    def on_error(self, error: Exception, error_message: str):
+        """
+        Invoked when a validator encounters an exception during the run
+        """
+        bt.logging.error(f"Error during validation: {str(error)}")
+        bt.logging.debug(error_message)
 
     def run_in_background_thread(self):
         """
