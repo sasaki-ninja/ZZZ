@@ -18,14 +18,13 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Depends, Request
 from timezonefinder import TimezoneFinder
 
-from zeus.utils.uids import get_random_uids
 from zeus.validator.constants import (
-    MAINNET_UID, ERA5_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
+    LIVE_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
 )
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.reward import help_format_miner_output, get_shape_penalty
 from zeus.protocol import TimePredictionSynapse
-from zeus.utils.time import get_timestamp, get_today, get_hours, safe_tz_convert
+from zeus.utils.time import get_today, get_hours, safe_tz_convert
 from zeus.utils.coordinates import get_grid, expand_to_grid, interp_coordinates
 
 from zeus.api.eager_dendrite import EagerDendrite
@@ -41,8 +40,8 @@ class ValidatorProxy:
         )
         self.proxy_api_key = os.getenv("PROXY_API_KEY")
         if not self.proxy_api_key or self.proxy_api_key == "":
-            bt.logging.warning("[PROXY] No proxy API key has been specified in the validator.env file! \
-                                Proxy will be disabled for safety reasons")
+            bt.logging.warning("[PROXY] No proxy API key has been specified in the validator.env file! " +
+                                "Proxy will be disabled for safety reasons")
             return
 
         self.timezone_finder = TimezoneFinder()
@@ -244,7 +243,7 @@ class ValidatorProxy:
 
         start_offset = get_hours(get_today("h"), start_time)
         assert (
-            start_offset >= ERA5_START_OFFSET_RANGE[0] and start_offset < ERA5_START_OFFSET_RANGE[1]
+            start_offset >= LIVE_START_OFFSET_RANGE[0] and start_offset < LIVE_START_OFFSET_RANGE[1]
         ), "You start time can only be between 5 days in the past up to 7 days in the future"
     
         return start_time, end_time, int(predict_hours)

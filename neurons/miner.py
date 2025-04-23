@@ -51,12 +51,12 @@ class Miner(BaseMinerNeuron):
         bt.logging.info("Attaching forward functions to miner axon.")
         self.axon.attach(
             forward_fn=self.forward_live,
-            blacklist_fn=self.blacklist,
-            priority_fn=self.priority,
+            blacklist_fn=self.blacklist_live,
+            priority_fn=self.priority_live,
         ).attach(
             forward_fn=self.forward_historic,
-            blacklist_fn=self.blacklist,
-            priority_fn=self.priority,
+            blacklist_fn=self.blacklist_historic,
+            priority_fn=self.priority_historic,
         )
         
         # TODO(miner): Anything specific to your use case you can do here
@@ -140,6 +140,18 @@ class Miner(BaseMinerNeuron):
         synapse.version = zeus_version
         return synapse
 
+    async def blacklist_live(self, synapse: TimePredictionSynapse) -> typing.Tuple[bool, str]:
+        return await self.blacklist(synapse)
+    
+    async def blacklist_historic(self, synapse: HistoricPredictionSynapse) -> typing.Tuple[bool, str]:
+        return await self.blacklist(synapse)
+    
+    async def priority_live(self, synapse: TimePredictionSynapse) -> float:
+        return await self.priority(synapse)
+    
+    async def priority_historic(self, synapse: HistoricPredictionSynapse) -> float:
+        return await self.priority(synapse)
+    
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":

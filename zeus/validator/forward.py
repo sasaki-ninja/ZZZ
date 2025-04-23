@@ -50,12 +50,12 @@ async def forward(self: BaseValidatorNeuron):
     """
     # based on the block, we decide if we should score old stored predictions.
     if self.database.should_score(self.block):
-        bt.logging.info(f"Scoring all stored predictions for live ERA5 data.")
+        bt.logging.info(f"Potentially scoring stored predictions for live ERA5 data.")
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
     
     data_loader: Era5BaseLoader = self.google_loader
-    if np.random.rand() > LIVE_CHALLENGE_PROB and self.cds_loader.is_ready():
+    if np.random.rand() < LIVE_CHALLENGE_PROB and self.cds_loader.is_ready():
         data_loader = self.cds_loader
 
     bt.logging.info(f"Sampling data...")
