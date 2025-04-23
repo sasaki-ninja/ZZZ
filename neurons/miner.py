@@ -28,7 +28,7 @@ import numpy as np
 from zeus.utils.misc import celcius_to_kelvin
 from zeus.utils.config import get_device_str
 from zeus.utils.time import get_timestamp
-from zeus.protocol import TimePredictionSynapse
+from zeus.protocol import TimePredictionSynapse, HistoricPredictionSynapse
 from zeus.base.miner import BaseMinerNeuron
 from zeus import __version__ as zeus_version
 
@@ -37,25 +37,38 @@ class Miner(BaseMinerNeuron):
     """
     Your miner neuron class. You should use this class to define your miner's behavior.
     In particular, you should replace the forward function with your own logic.
-    You may also want to override the blacklist and priority functions according to your needs.
 
-    Currently the miner simply does a request to OpenMeteo (https://open-meteo.com/) asking for a prediction.
+    Currently the base miner does a request to OpenMeteo (https://open-meteo.com/) for current/future ('live') predictions.
     You are encouraged to attempt to improve over this by changing the forward function.
+
+    For historic predictions, the base miner simply repeats the last hour of input data to match the required shape.
+    To be competitive, you will need to implement your own intelligent forecasting model for this reduced-data setting.
     """
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-        self.device: torch.device = torch.device(get_device_str())
+        bt.logging.info("Attaching forward functions to miner axon.")
+        self.axon.attach(
+            forward_fn=self.forward_live,
+            blacklist_fn=self.blacklist,
+            priority_fn=self.priority,
+        ).attach(
+            forward_fn=self.forward_historic,
+            blacklist_fn=self.blacklist,
+            priority_fn=self.priority,
+        )
+        
         # TODO(miner): Anything specific to your use case you can do here
+        self.device: torch.device = torch.device(get_device_str())
         self.openmeteo_api = openmeteo_requests.Client()
 
-    async def forward(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
+    async def forward_live(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
         """
-        Processes the incoming TimePredictionSynapse by performing a predefined operation on the input.
+        Processes the incoming TimePredictionSynapse for a current/future prediction.
 
         Args:
-            synapse (TimePredictionSynapse): The synapse object containing the input data.
+            synapse (TimePredictionSynapse): The synapse object containing the time range and coordinates
 
         Returns:
             TimePredictionSynapse: The synapse object with the 'predictions' field set".
@@ -64,9 +77,8 @@ class Miner(BaseMinerNeuron):
         coordinates = torch.Tensor(synapse.locations)
         start_time = get_timestamp(synapse.start_time)
         end_time = get_timestamp(synapse.end_time)
-        bt.logging.info(f"Received request from {synapse.dendrite.hotkey[:5]}")
         bt.logging.info(
-            f"Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
+            f"Received current/future request! Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
         )
 
         ##########################################################################################################
@@ -93,112 +105,40 @@ class Miner(BaseMinerNeuron):
         output = output[start_time.hour : (-23 + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
+
         synapse.predictions = output.tolist()
         synapse.version = zeus_version
-
         return synapse
+    
 
-    async def blacklist(
-        self, synapse: TimePredictionSynapse
-    ) -> typing.Tuple[bool, str]:
+    async def forward_historic(self, synapse: HistoricPredictionSynapse) -> HistoricPredictionSynapse:
         """
-        Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
-        define the logic for blacklisting requests based on your needs and desired security parameters.
-
-        Blacklist runs before the synapse data has been deserialized (i.e. before synapse.data is available).
-        The synapse is instead contracted via the headers of the request. It is important to blacklist
-        requests before they are deserialized to avoid wasting resources on requests that will be ignored.
+        Processes the incoming HistoricPredictionSynapse based on its input data and optionally the location.
+        # NOTE: the location is likely to be near the middle of the box, but there is some gaussian noise in its location.
 
         Args:
-            synapse (template.protocol.Dummy): A synapse object constructed from the headers of the incoming request.
+            synapse (HistoricPredictionSynapse): The synapse object containing the input data.
 
         Returns:
-            Tuple[bool, str]: A tuple containing a boolean indicating whether the synapse's hotkey is blacklisted,
-                            and a string providing the reason for the decision.
-
-        This function is a security measure to prevent resource wastage on undesired requests. It should be enhanced
-        to include checks against the metagraph for entity registration, validator status, and sufficient stake
-        before deserialization of synapse data to minimize processing overhead.
-
-        Example blacklist logic:
-        - Reject if the hotkey is not a registered entity within the metagraph.
-        - Consider blacklisting entities that are not validators or have insufficient stake.
-
-        In practice it would be wise to blacklist requests from entities that are not validators, or do not have
-        enough stake. This can be checked via metagraph.S and metagraph.validator_permit. You can always attain
-        the uid of the sender via a metagraph.hotkeys.index( synapse.dendrite.hotkey ) call.
-
-        Otherwise, allow the request to be processed further.
+            HistoricPredictionSynapse: The synapse object with the 'predictions' field set".
         """
-        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning("Received a request without a dendrite or hotkey.")
-            return True, "Missing dendrite or hotkey"
 
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if (
-            not self.config.blacklist.allow_non_registered
-            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
-        ):
-            # Ignore requests from un-registered entities.
-            bt.logging.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
-            )
-            return True, "Unrecognized hotkey"
-
-        if self.config.blacklist.force_validator_permit:
-            # If the config is set to force validator permit, then we should only allow requests from validators.
-            if not self.metagraph.validator_permit[uid]:
-                bt.logging.warning(
-                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
-                )
-                return True, "Non-validator hotkey"
-            
-        if self.metagraph.S[uid] < self.config.blacklist.minimal_alpha_stake:
-            # require true validators to have at least minimal alpha stake.
-            bt.logging.warning(
-                f"Blacklisting a request from hotkey {synapse.dendrite.hotkey} with only {self.metagraph.S[uid]} stake."
-            )
-            return True, "Non-validator hotkey"
-
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
+        bt.logging.info(
+            f"Received historic request! Predicting {synapse.requested_hours} near {synapse.location}."
         )
-        return False, "Hotkey recognized!"
+        # shape (time, lat, lon) containing input temperature data
+        input_data = torch.Tensor(synapse.input_data)
 
-    async def priority(self, synapse: TimePredictionSynapse) -> float:
-        """
-        The priority function determines the order in which requests are handled. More valuable or higher-priority
-        requests are processed before others. You should design your own priority mechanism with care.
+        ##########################################################################################################
+        # TODO (miner) you might want to do something more intelligent than repeating the last measurement
+        output = input_data[-1]
+        output = output.expand(synapse.requested_hours, *output.shape)
+        ##########################################################################################################
+        bt.logging.info(f"Output shape is {output.shape}")
 
-        This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object that contains metadata about the incoming request.
-
-        Returns:
-            float: A priority score derived from the stake of the calling entity.
-
-        Miners may receive messages from multiple entities at once. This function determines which request should be
-        processed first. Higher values indicate that the request should be processed first. Lower values indicate
-        that the request should be processed later.
-
-        Example priority logic:
-        - A higher stake results in a higher priority value.
-        """
-        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning("Received a request without a dendrite or hotkey.")
-            return 0.0
-
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        priority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
-        )
-        return priority
+        synapse.predictions = output.tolist()
+        synapse.version = zeus_version
+        return synapse
 
 
 # This is the main function, which runs the miner.
@@ -206,4 +146,4 @@ if __name__ == "__main__":
     with Miner() as miner:
         while True:
             bt.logging.info(f"Miner running | uid {miner.uid} | {time.time()}")
-            time.sleep(5)
+            time.sleep(30)

@@ -31,6 +31,7 @@ from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
 from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.era5.era5_google import ERA5GoogleLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
 from zeus.validator.constants import (
@@ -39,13 +40,6 @@ from zeus.validator.constants import (
 
 
 class Validator(BaseValidatorNeuron):
-    """
-    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
-
-    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
-    """
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
@@ -54,7 +48,7 @@ class Validator(BaseValidatorNeuron):
         self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
 
-        #self.google_loader = ERA5GoogleLoader()
+        self.google_loader = ERA5GoogleLoader()
         self.cds_loader = Era5CDSLoader()
 
         self.database = ResponseDatabase(self.cds_loader)

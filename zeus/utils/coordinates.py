@@ -73,6 +73,21 @@ def get_grid(
         dim=-1,
     )  # (lat, lon, 2)
 
+@check_shapes(
+    "grid: [lat, lon, 2]",
+    "return: [2]",
+)
+def gaussian_grid_sample(grid: Union[torch.Tensor, np.ndarray], stds_in_radius = 3) -> Tuple[float, float]:
+    lat, lon = grid.shape[:2]
+
+    while True:
+        # 91% within 2 stds on both axis
+        i = round(np.random.normal(lat / 2, (lat / 2 / stds_in_radius) ** 2))
+        j = round(np.random.normal(lon / 2, (lon / 2 / stds_in_radius) ** 2))
+
+        if 0 <= i < lat and 0 <= j < lon:
+            return grid[i, j]
+
 
 def expand_to_grid(
     lat: float, lon: float, fidelity: float = 4

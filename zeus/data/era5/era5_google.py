@@ -11,6 +11,9 @@ from zeus.data.era5.era5_base import Era5BaseLoader
 from zeus.data.sample import Era5Sample
 from zeus.validator.constants import (
     GCLOUD_ERA5_URL,
+    HISTORIC_DATE_RANGE,
+    HISTORIC_HOURS_PREDICT_RANGE,
+    HISTORIC_INPUT_HOURS,
     MIN_INTERPOLATION_DISTORTIONS,
     MAX_INTERPOLATION_DISTORTIONS,
 )
@@ -26,10 +29,15 @@ class ERA5GoogleLoader(Era5BaseLoader):
     def __init__(
         self,
         gcloud_url: str = GCLOUD_ERA5_URL,
+        date_range: Tuple[str, str] = HISTORIC_DATE_RANGE,
+        input_hours: int = HISTORIC_INPUT_HOURS,
         **kwargs,
     ) -> None:
         self.gcloud_url = gcloud_url
-        super().__init__(**kwargs)
+        self.date_range = list(map(pd.to_datetime, sorted(date_range)))
+        self.input_hours = input_hours
+
+        super().__init__(predict_sample_range=HISTORIC_HOURS_PREDICT_RANGE, **kwargs)
 
     def load_dataset(self) -> xr.Dataset:
         dataset = xr.open_zarr(
@@ -45,18 +53,18 @@ class ERA5GoogleLoader(Era5BaseLoader):
         but the end could be any hour on a day after start.
 
         Returns:
-         - start_timestamp (pd.Timestamp): The start of the time range.
-         - end_timestamp (pd.Timestamp): The end of the time range.
-         - num_predict_hours (int): The number of hours to be predicted (difference between start and end).
+         - start_timestamp (pd.Timestamp): The start of the time range to be predicted.
+         - end_timestamp (pd.Timestamp): The end of the time range to be predicted.
+         - num_predict_hours (int): The number of hours to be predicted (difference between start and end, including both limits).
         """
-        latest_day = (self.date_range[1] - self.date_range[0]).days - math.floor(
+        latest_day = (self.date_range[1] - self.date_range[0]).days - math.ceil(
             self.predict_sample_range[1] / 24
         )
         start_timestamp = self.date_range[0] + pd.Timedelta(
             days=np.random.randint(0, latest_day)
         )
         num_predict_hours = np.random.randint(*self.predict_sample_range)
-        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours)
+        end_timestamp = start_timestamp + pd.Timedelta(hours=num_predict_hours - 1)
         return start_timestamp, end_timestamp, num_predict_hours
 
     def get_sample(self) -> Era5Sample:
@@ -68,33 +76,42 @@ class ERA5GoogleLoader(Era5BaseLoader):
         """
         # get a random rectangular bounding box
         lat_start, lat_end, lon_start, lon_end = self.sample_bbox()
-        start_time, end_time, _ = self.sample_time_range()
+        start_time, end_time, predict_hours = self.sample_time_range()
 
-        data = self.get_data(
+        data4d = self.get_data(
             lat_start=lat_start,
             lat_end=lat_end,
             lon_start=lon_start,
             lon_end=lon_end,
-            start_time=start_time,
+            start_time=start_time - pd.Timedelta(hours=self.input_hours),
             end_time=end_time,
-        )
+        ) 
+        # slice off lat, lon and flatten last dimension
+        data = data4d[..., 2:].squeeze(dim=-1)
 
-        x_grid = data[0, ..., :2]
-        # Slice off the latitude and longitude for the output
-        output_data = data[..., 2:].squeeze()
+        input_data = data[:-predict_hours] # input_hours amount
+        input_data = interp_distort(input_data)
+        output_data = data[-predict_hours:]
 
         return Era5Sample(
+            lat_start=lat_start,
+            lat_end=lat_end,
+            lon_start=lon_start,
+            lon_end=lon_end,
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
-            x_grid=x_grid,
+            input_data=input_data,
             output_data=output_data,
         )
 
 
-def interp_distort(matrix: torch.Tensor, num_distortions: int) -> torch.Tensor:
+def interp_distort(matrix: torch.Tensor, num_distortions: Optional[int] = None) -> torch.Tensor:
     """
-    Interpolate the input data with some random noise.
+    Interpolate the input data slightly at random locations, to prevent hash-lookups
     """
+    if num_distortions is None:
+        num_distortions = np.random.randint(MIN_INTERPOLATION_DISTORTIONS, MAX_INTERPOLATION_DISTORTIONS)
+
     for _ in range(num_distortions):
         t = np.random.randint(1, matrix.shape[0] - 2)
         lat = np.random.randint(1, matrix.shape[1] - 2)
@@ -104,8 +121,7 @@ def interp_distort(matrix: torch.Tensor, num_distortions: int) -> torch.Tensor:
         )
         alpha = np.random.uniform(0.0, 0.1)
 
-        matrix[t, lat, lon, 2:] = (1 - alpha) * matrix[
-            t, lat, lon, 2:
-        ] + alpha * matrix[t + offset_t, lat + offset_lat, lon + offset_lon, 2:]
+        matrix[t, lat, lon] = (1 - alpha) * matrix[t, lat, lon] \
+            + alpha * matrix[t + offset_t, lat + offset_lat, lon + offset_lon]
 
     return matrix

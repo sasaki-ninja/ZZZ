@@ -17,6 +17,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from abc import ABC
 import typing
 import bittensor as bt
 import torch
@@ -25,25 +26,7 @@ from pydantic import Field
 from typing import List, Tuple
 
 
-# This is the protocol for the dummy miner and validator.
-# It is a simple request-response protocol where the validator sends a request
-# to the miner, and the miner responds with a dummy response.
-
-# ---- miner ----
-# Example usage:
-#   def dummy( synapse: Dummy ) -> Dummy:
-#       synapse.dummy_output = synapse.dummy_input + 1
-#       return synapse
-#   axon = bt.axon().attach( dummy ).serve(netuid=...).start()
-
-# ---- validator ---
-# Example usage:
-#   dendrite = bt.dendrite()
-#   dummy_output = dendrite.query( Dummy( dummy_input = 1 ) )
-#   assert dummy_output == 2
-
-
-class TimePredictionSynapse(bt.Synapse):
+class PredictionSynapse(bt.Synapse, ABC):
     """
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling request and response communication between
@@ -55,28 +38,6 @@ class TimePredictionSynapse(bt.Synapse):
         description="Version matches the version-string of the SENDER, either validator or miner",
         default = "",
         frozen = False,
-    )
-
-    # Required request input, filled by sending dendrite caller.
-    locations: List[List[Tuple[float, float]]] = Field(
-        title="Locations to predict",
-        description="Locations to predict. Represents a grid of (latitude, longitude) pairs.",
-        default=[],
-        frozen=False,
-    )
-
-    start_time: float = Field(
-        title="start timestamp",
-        description="Starting timestamp in GMT+0 as a float",
-        default=0.0,
-        frozen=False,
-    )
-
-    end_time: float = Field(
-        title="end timestamp",
-        description="Ending timestamp in GMT+0 as a float",
-        default=0.0,
-        frozen=False,
     )
 
     requested_hours: int = Field(
@@ -100,6 +61,57 @@ class TimePredictionSynapse(bt.Synapse):
         the miner, deserializes it and returns it as the output of the dendrite.query() call.
 
         Returns:
-        - np.ndarray: The deserialized response
+        - torch.tensor: The deserialized response
         """
         return torch.tensor(self.predictions)
+
+
+class TimePredictionSynapse(PredictionSynapse):
+    """
+    Used for recent/future prediction. Class name is frozen to maintain cross version compatibility
+    """
+
+    # Required request input, filled by sending dendrite caller.
+    locations: List[List[Tuple[float, float]]] = Field(
+        title="Locations to predict",
+        description="Locations to predict. Represents a grid of (latitude, longitude) pairs.",
+        default=[],
+        frozen=False,
+    )
+
+    start_time: float = Field(
+        title="start timestamp",
+        description="Starting timestamp in GMT+0 as a float",
+        default=0.0,
+        frozen=False,
+    )
+
+    end_time: float = Field(
+        title="end timestamp",
+        description="Ending timestamp in GMT+0 as a float",
+        default=0.0,
+        frozen=False,
+    )
+
+
+class HistoricPredictionSynapse(PredictionSynapse):
+    """
+    Used for historic predictions which can directly be scored. 
+    Time is omitted to prevent hash-like lookups.
+    Location represent a point inside the box, but is not necessarily the middle (prevent gaming)
+    """
+
+    # Required request input, filled by sending dendrite caller.
+    input_data: List[List[List[float]]] = Field(
+        title="Input",
+        description="The tensor to be used as input for enviromental prediction.",
+        default=[],
+        frozen=False,
+    )
+   
+    location: Tuple[float, float] = Field(
+        title="Approximate location",
+        description="Location as [lat, lon] for a random point inside the input box.",
+        default=[],
+        frozen=False,
+    )
