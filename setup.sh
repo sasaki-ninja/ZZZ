@@ -66,7 +66,7 @@ PROXY_PORT=
 
 # API Keys:
 WANDB_API_KEY=      # https://wandb.ai/authorize
-CDS_API_KEY =       # https://github.com/Orpheus-AI/Zeus/blob/main/docs/Validating.md#ecmwf
+CDS_API_KEY=        # https://github.com/Orpheus-AI/Zeus/blob/main/docs/Validating.md#ecmwf
 PROXY_API_KEY=      # Your Proxy API Key, you can generate it yourself
 EOL
     echo "File 'validator.env' created."

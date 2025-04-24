@@ -33,10 +33,12 @@ from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import set_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.uids import get_random_uids
+from zeus.utils.logging import maybe_reset_wandb
+from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.constants import FORWARD_DELAY_SECONDS, MAINNET_UID
 
 
-async def forward(self):
+async def forward(self: BaseValidatorNeuron):
     """
     The forward function is called by the validator every time step.
 
@@ -69,11 +71,9 @@ async def forward(self):
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
     )
 
-    miner_uids = get_random_uids(
-        self.metagraph,
-        self.config.neuron.sample_size,
-        self.config.neuron.vpermit_tao_limit,
-        MAINNET_UID,
+    miner_uids = self.uid_tracker.get_random_uids(
+        k = self.config.neuron.sample_size,
+        tries = 3
     )
 
     axons = [self.metagraph.axons[uid] for uid in miner_uids]
@@ -96,10 +96,11 @@ async def forward(self):
     )
     miners_data = get_scored_miners(self, sample, miner_hotkeys, responses)
     # Identify miners who should receive a penalty
-    good_miners, bad_miners = split_list(miners_data, lambda m: m.penalty == 0.0)
+    good_miners, bad_miners = split_list(miners_data, lambda m: not m.shape_penalty)
 
     if len(bad_miners) > 0:
         uids = [miner.uid for miner in bad_miners]
+        self.uid_tracker.mark_finished(uids, good=False)
         bt.logging.success(f"Punishing miners that did not respond immediately: {uids}")
         self.update_scores(
             [miner.reward for miner in bad_miners],
@@ -109,8 +110,7 @@ async def forward(self):
 
     if len(good_miners) > 0:
          # store non-penalty miners for proxy
-        self.last_responding_miner_uids = [m.uid for m in good_miners]
-
+        self.uid_tracker.mark_finished([m.uid for m in good_miners], good=True)
         bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
         self.database.insert(
             sample,
@@ -118,9 +118,10 @@ async def forward(self):
             [miner.prediction for miner in good_miners],
         )
 
+    # prevent W&B logs from becoming massive
+    maybe_reset_wandb(self)
     # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
-    time.sleep(FORWARD_DELAY_SECONDS - (time.time() - start))
-
+    time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start)))
 
 def complete_challenge(
     self,
@@ -142,7 +143,7 @@ def complete_challenge(
 
     for miner in miners_data:
         bt.logging.success(
-            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.penalty}"
+            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
         )
     do_wandb_logging(self, sample, miners_data)
 
@@ -184,12 +185,13 @@ def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):
             commit=False,  # All logging should be the same commit
         )
 
+    uid_to_hotkey = {miner.uid: miner.hotkey for miner in miners_data}
     wandb.log(
         {
             "start_timestamp": challenge.start_timestamp,
             "end_timestamp": challenge.end_timestamp,
             "predict_hours": challenge.predict_hours,
             "lat_lon_bbox": challenge.get_bbox(),
+            "uid_to_hotkey": uid_to_hotkey,
         },
     )
-

@@ -8,13 +8,14 @@ class MinerData:
     uid: int
     hotkey: str
     prediction: torch.Tensor
-    reward: Optional[float] = None  # not set initially
-    penalty: Optional[float] = None
-    _metrics: Dict[str, float] = field(default_factory=dict)
+    reward: Optional[float] = None # all below are not set initially
+    rmse: Optional[float] = None
+    shape_penalty: Optional[bool] = None
 
     @property
     def metrics(self):
-        return self._metrics | {
-            "score": self.reward,
-            "penalty": self.penalty
-        }
+        return {
+             "RMSE": self.rmse,
+             "score": self.reward,
+             "shape_penalty": self.shape_penalty,
+         }

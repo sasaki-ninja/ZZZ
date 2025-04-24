@@ -35,7 +35,6 @@ from zeus.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
-from zeus.utils.mock import MockDendrite
 from zeus.utils.config import add_validator_args
 
 
@@ -59,7 +58,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:
-            self.dendrite = MockDendrite(wallet=self.wallet)
+            pass
         else:
             self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
@@ -175,6 +174,7 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as err:
             bt.logging.error(f"Error during validation: {str(err)}")
             bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            self.should_exit = True            
 
     def run_in_background_thread(self):
         """

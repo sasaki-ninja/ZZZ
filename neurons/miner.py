@@ -25,7 +25,7 @@ import bittensor as bt
 import openmeteo_requests
 
 import numpy as np
-from zeus.utils.misc import celcius_to_kelvin, is_updated
+from zeus.utils.misc import celcius_to_kelvin
 from zeus.utils.config import get_device_str
 from zeus.utils.time import get_timestamp
 from zeus.protocol import TimePredictionSynapse
@@ -90,8 +90,7 @@ class Miner(BaseMinerNeuron):
         output = celcius_to_kelvin(output)
 
         # OpenMeteo returns full days, so slice, make sure end hour is included only for up-to-date validators.
-        end_bound = 23 if is_updated(synapse.version) else 24
-        output = output[start_time.hour : (-end_bound + end_time.hour)]
+        output = output[start_time.hour : (-23 + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
         synapse.predictions = output.tolist()

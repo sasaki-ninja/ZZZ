@@ -19,15 +19,17 @@
 
 
 import time
+import os
+import signal
 
 import bittensor as bt
 import wandb
 
 import zeus
+from zeus.validator.uid_tracker import UIDTracker
 from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
-from zeus.data.era5.era5_google import ERA5GoogleLoader
 from zeus.data.era5.era5_cds import Era5CDSLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
@@ -49,7 +51,7 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
         self.load_state()
 
-        self.last_responding_miner_uids = []
+        self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
 
         #self.google_loader = ERA5GoogleLoader()
@@ -70,6 +72,10 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         return await forward(self)
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        super().__exit__(exc_type, exc_value, traceback)
+        self.validator_proxy.stop_server()
 
     def init_wandb(self):
         if self.config.wandb.off:
@@ -92,20 +98,6 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(
             f"Initializing W&B run for '{self.config.wandb.entity}/{wandb_project}'"
         )
-        run_id = None
-        try:
-            # Check if the run already exists for this validator so we can continue it
-            runs = wandb.Api().runs(
-                f"{self.config.wandb.entity}/{wandb_project}",
-                filters={"display_name": run_name, "config.hotkey": self.config.hotkey},
-                order="-created_at",
-            )
-            if len(runs) > 0:
-                run_id = runs[0].id
-        except Exception as e:
-            bt.logging.warning(e)
-            bt.logging.warning("Failed to fetch previous runs. Starting a new run.")
-
         try:
             run_id = wandb.init(
                 name=run_name,
@@ -113,9 +105,7 @@ class Validator(BaseValidatorNeuron):
                 entity=self.config.wandb.entity,
                 config=self.config,
                 dir=self.config.full_path,
-                reinit=True,
-                resume="allow",
-                id=run_id,
+                mode="offline" if self.config.wandb.offline else None
             ).id
         except wandb.UsageError as e:
             bt.logging.warning(e)
@@ -133,6 +123,6 @@ class Validator(BaseValidatorNeuron):
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
     with Validator() as validator:
-        while True:
+        while not validator.should_exit:
             bt.logging.info(f"Validator running... {time.time()}")
-            time.sleep(20)
+            time.sleep(30)

@@ -22,7 +22,8 @@ from zeus.utils.uids import get_random_uids
 from zeus.validator.constants import (
     MAINNET_UID, ERA5_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
 )
-from zeus.validator.reward import help_format_miner_output, compute_penalty
+from zeus.base.validator import BaseValidatorNeuron
+from zeus.validator.reward import help_format_miner_output, get_shape_penalty
 from zeus.protocol import TimePredictionSynapse
 from zeus.utils.time import get_timestamp, get_today, get_hours, safe_tz_convert
 from zeus.utils.coordinates import get_grid, expand_to_grid, interp_coordinates
@@ -33,12 +34,17 @@ from zeus.api.eager_dendrite import EagerDendrite
 class ValidatorProxy:
     def __init__(
         self,
-        validator,
+        validator: BaseValidatorNeuron,
     ):
         load_dotenv(
             os.path.join(os.path.abspath(os.path.dirname(__file__)), "../validator.env")
         )
         self.proxy_api_key = os.getenv("PROXY_API_KEY")
+        if not self.proxy_api_key or self.proxy_api_key == "":
+            bt.logging.warning("[PROXY] No proxy API key has been specified in the validator.env file! \
+                                Proxy will be disabled for safety reasons")
+            return
+
         self.timezone_finder = TimezoneFinder()
         self.validator = validator
         self.dendrite = EagerDendrite(wallet=validator.wallet)
@@ -65,9 +71,17 @@ class ValidatorProxy:
 
     def start_server(self):
         self.executor = ThreadPoolExecutor(max_workers=1)
-        self.executor.submit(
-            uvicorn.run, self.app, host="0.0.0.0", port=self.validator.config.proxy.port
+        self.server = uvicorn.Server(
+            uvicorn.Config(
+                self.app, host="0.0.0.0", port=self.validator.config.proxy.port
+            )
         )
+        self.executor.submit(self.server.run)
+
+    def stop_server(self):
+        if hasattr(self, "server"):
+            self.server.should_exit = True
+            self.executor.shutdown(wait=True)
 
     def authorize_token(self, headers):
         authorization: str = headers.get("authorization", None)
@@ -77,24 +91,22 @@ class ValidatorProxy:
         if authorization != self.proxy_api_key:
             raise HTTPException(status_code=401, detail="Invalid authorization token")
 
-    def get_axons(self) -> List[bt.Axon]:
-        metagraph = self.validator.metagraph
-        miner_uids: List[int] = self.validator.last_responding_miner_uids[:PROXY_QUERY_K]
-
+    def get_proxy_uids(self) -> List[int]:
+        miner_uids: List[int] = self.validator.uid_tracker.get_responding_uids(PROXY_QUERY_K)
+    
         if len(miner_uids) < PROXY_QUERY_K:
+            to_sample = PROXY_QUERY_K - len(miner_uids)
             bt.logging.warning(
-                    "[PROXY] Not enough recent miner uids found, sampling additional random uids"
+                    f"[PROXY] Not enough non-busy recent miners found, sampling {to_sample} additional miners"
             )
             miner_uids.extend(
-                get_random_uids(
-                    metagraph, 
-                    PROXY_QUERY_K - len(miner_uids),
-                    self.validator.config.neuron.vpermit_tao_limit,
-                    MAINNET_UID,
+                self.validator.uid_tracker.get_random_uids(
+                    k = to_sample,
+                    tries = 2,
+                    sleep = 0.2
                 )
             )
-        
-        return [metagraph.axons[uid] for uid in miner_uids]
+        return miner_uids
 
     async def predict_grid_temperature(self, request: Request):
         self.authorize_token(request.headers)
@@ -132,8 +144,9 @@ class ValidatorProxy:
             )
 
         # getting responses EAGERLY
+        miner_uids = self.get_proxy_uids()
         prediction = await self.dendrite(
-            axons=self.get_axons(),
+            axons=[self.validator.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=True,
             timeout=10,
@@ -142,6 +155,7 @@ class ValidatorProxy:
                 correct_shape=(predict_hours, grid.shape[0], grid.shape[1])
             )
         )
+        self.validator.uid_tracker.mark_finished(miner_uids)
 
         if prediction is None:
             bt.logging.info(f"[PROXY] Received no valid responses from miners")
@@ -182,8 +196,9 @@ class ValidatorProxy:
             )
 
         # getting responses EAGERLY
+        miner_uids = self.get_proxy_uids()
         prediction = await self.dendrite(
-            axons=self.get_axons(),
+            axons=[self.validator.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=True,
             timeout=10,
@@ -192,6 +207,7 @@ class ValidatorProxy:
                 correct_shape=(predict_hours, grid.shape[0], grid.shape[1])
             )
         )
+        self.validator.uid_tracker.mark_finished(miner_uids)
 
         if prediction is None:
             bt.logging.info(f"[PROXY] Received no valid responses from miners")
@@ -283,6 +299,4 @@ class ValidatorProxy:
 def is_valid_synapse(response: torch.Tensor, correct_shape: Tuple[int]) -> bool:
     dummy_output = torch.zeros(*correct_shape)
     prediction = help_format_miner_output(dummy_output, response)
-    penalty = compute_penalty(dummy_output, prediction)
-
-    return penalty == 0
+    return not get_shape_penalty(dummy_output, prediction)

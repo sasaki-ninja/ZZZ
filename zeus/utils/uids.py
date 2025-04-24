@@ -1,7 +1,7 @@
 import random
 import bittensor as bt
 import numpy as np
-from typing import List
+from typing import Set
 
 
 def check_uid_availability(
@@ -37,7 +37,7 @@ def get_random_uids(
     k: int,
     vpermit_tao_limit: int,
     mainnet_uid: int,
-    exclude: List[int] = None,
+    exclude: Set[int] = None,
 ) -> np.ndarray:
     """Returns k available random uids from the metagraph.
     Args:
@@ -56,8 +56,7 @@ def get_random_uids(
     if k < 0:
         raise ValueError("k must be non-negative")
     if exclude is None:
-        exclude = []
-    exclude_set = set(exclude)
+        exclude = set()
 
     avail_uids = []
     for uid in range(metagraph.n.item()):
@@ -67,7 +66,7 @@ def get_random_uids(
         if available:
             avail_uids.append(uid)
 
-    candidate_uids = [uid for uid in avail_uids if uid not in exclude_set]
+    candidate_uids = [uid for uid in avail_uids if uid not in exclude]
 
     sample_size = min(k, len(candidate_uids))
     if sample_size == 0:

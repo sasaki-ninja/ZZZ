@@ -34,6 +34,9 @@ REWARD_DIFFICULTY_SCALER = 3.0
 
 PROXY_QUERY_K = 10 # how many miners proxy queries
 
+# wandb website refuses to update logs after roughly 100k, so reset run if this happens
+WANDB_MAX_LOGS = 95_000
+
 # ------------------------------------------------------
 # ------------------ Unused Constants ------------------
 # ------------------------------------------------------
