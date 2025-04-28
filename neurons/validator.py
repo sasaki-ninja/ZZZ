@@ -78,7 +78,7 @@ class Validator(BaseValidatorNeuron):
         self.validator_proxy.stop_server()
 
 
-    def on_error(self, error, error_message):
+    def on_error(self, error: Exception, error_message: str):
         super().on_error(error, error_message)
 
         if not self.discord_hook:
@@ -91,10 +91,10 @@ class Validator(BaseValidatorNeuron):
             content=f"Your validator had an error -- see below!",
             timeout=5,
         )
-        embed = DiscordEmbed(title=error, description=error_message)
+        embed = DiscordEmbed(title=repr(error), description=error_message)
         embed.set_timestamp()
         if wandb.run and not wandb.run.offline:
-            embed.add_embed_field(name="", value=f"[WANDB]({wandb.run.get_url()})", inline=False)
+            embed.add_embed_field(name="", value=f"[WANDB]({wandb.run.get_url()}/logs)", inline=False)
         webhook.add_embed(embed)
         webhook.execute()
 

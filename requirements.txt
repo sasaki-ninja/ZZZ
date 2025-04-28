@@ -19,13 +19,14 @@ discord_webhook==1.4.1
 
 cartopy==0.24.1
 tqdm==4.67.1
-cdsapi==0.7.5
 dotenv==0.9.9
 
 check_shapes==1.1.1
 
 # validators only
 timezonefinder==6.5.8
+discord-webhook==1.4.1
+cdsapi==0.7.5
 
 # miners only
 openmeteo-requests==1.3.0
