@@ -17,7 +17,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from functools import partial
 import time
 import bittensor as bt
@@ -26,13 +26,12 @@ import numpy as np
 import torch
 
 from zeus.data.sample import Era5Sample
-from zeus.data.era5.era5_base import Era5BaseLoader
+from zeus.data.era5.era5_cds import Era5CDSLoader
 from zeus.utils.misc import split_list
 from zeus.utils.time import timestamp_to_str
 from zeus.utils.coordinates import bbox_to_str
 from zeus.validator.reward import set_rewards
 from zeus.validator.miner_data import MinerData
-from zeus.utils.uids import get_random_uids
 from zeus.utils.logging import maybe_reset_wandb
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.constants import FORWARD_DELAY_SECONDS, LIVE_CHALLENGE_PROB
@@ -48,15 +47,18 @@ async def forward(self: BaseValidatorNeuron):
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
+    start_forward = time.time()
     # based on the block, we decide if we should score old stored predictions.
     if self.database.should_score(self.block):
         bt.logging.info(f"Potentially scoring stored predictions for live ERA5 data.")
         self.database.score_and_prune(score_func=partial(complete_challenge, self))
         return
     
-    data_loader: Era5BaseLoader = self.google_loader
-    if np.random.rand() < LIVE_CHALLENGE_PROB and self.cds_loader.is_ready():
-        data_loader = self.cds_loader
+    data_loader: Era5CDSLoader = self.cds_loader
+    if not data_loader.is_ready():
+        bt.logging.info("Data loader is not ready yet... Waiting until ERA5 data is downloaded.")
+        time.sleep(10)  # Don't need to spam above message
+        return
 
     bt.logging.info(f"Sampling data...")
     sample = data_loader.get_sample()
@@ -76,7 +78,7 @@ async def forward(self: BaseValidatorNeuron):
     miner_hotkeys: List[str] = list([axon.hotkey for axon in axons])
 
     bt.logging.info(f"Querying {len(miner_uids)} miners..")
-    start = time.time()
+    start_request = time.time()
     responses = await self.dendrite(
         axons=axons,
         synapse=sample.get_synapse(),
@@ -84,13 +86,12 @@ async def forward(self: BaseValidatorNeuron):
         timeout=self.config.neuron.timeout,
     )
 
-    bt.logging.success(f"Responses received in {time.time() - start}s")
+    bt.logging.success(f"Responses received in {time.time() - start_request}s")
 
-    if not sample.is_historic():
-        # Create a dummy output with the same shape as the sample's prediction grid to check for penalties
-        sample.output_data = torch.zeros(
-            sample.predict_hours, sample.x_grid.shape[0], sample.x_grid.shape[1]
-        )
+    # Create a dummy output with the same shape as the sample's prediction grid to check for penalties
+    sample.output_data = torch.zeros(
+        sample.predict_hours, sample.x_grid.shape[0], sample.x_grid.shape[1]
+    )
     miners_data = get_scored_miners(self, sample, miner_hotkeys, responses)
     # Identify miners who should receive a penalty
     good_miners, bad_miners = split_list(miners_data, lambda m: not m.shape_penalty)
@@ -107,22 +108,17 @@ async def forward(self: BaseValidatorNeuron):
 
     if len(good_miners) > 0:
          # store non-penalty miners for proxy
-        self.uid_tracker.mark_finished([m.uid for m in good_miners], good=not sample.is_historic())
+        self.uid_tracker.mark_finished([m.uid for m in good_miners], good=True)
         hotkeys = [miner.hotkey for miner in good_miners]
         predictions = [miner.prediction for miner in good_miners]
-
-        if sample.is_historic():
-            bt.logging.success("Scoring miners immediately for historic challenge: ")
-            complete_challenge(self, sample, hotkeys, predictions)
-
-        else:
-            bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
-            self.database.insert(sample, hotkeys, predictions)
+      
+        bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
+        self.database.insert(sample, hotkeys, predictions)
 
     # prevent W&B logs from becoming massive
     maybe_reset_wandb(self)
-    # Introduce a delay to prevent spamming requests - and so miners should stay under free tier API request limit
-    time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start)))
+    # Introduce a delay to prevent spamming requests
+    time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start_forward)))
 
 def complete_challenge(
     self,

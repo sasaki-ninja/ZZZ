@@ -190,7 +190,7 @@ class BaseMinerNeuron(BaseNeuron):
         self.metagraph.sync(subtensor=self.subtensor)
 
 
-    async def blacklist(
+    async def _blacklist(
         self, synapse: bt.Synapse
     ) -> Tuple[bool, str]:
         """
@@ -257,7 +257,7 @@ class BaseMinerNeuron(BaseNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: bt.Synapse) -> float:
+    async def _priority(self, synapse: bt.Synapse) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.

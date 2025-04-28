@@ -50,20 +50,16 @@ class Miner(BaseMinerNeuron):
 
         bt.logging.info("Attaching forward functions to miner axon.")
         self.axon.attach(
-            forward_fn=self.forward_live,
-            blacklist_fn=self.blacklist_live,
-            priority_fn=self.priority_live,
-        ).attach(
-            forward_fn=self.forward_historic,
-            blacklist_fn=self.blacklist_historic,
-            priority_fn=self.priority_historic,
+            forward_fn=self.forward,
+            blacklist_fn=self.blacklist,
+            priority_fn=self.priority,
         )
         
         # TODO(miner): Anything specific to your use case you can do here
         self.device: torch.device = torch.device(get_device_str())
         self.openmeteo_api = openmeteo_requests.Client()
 
-    async def forward_live(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
+    async def forward(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
         """
         Processes the incoming TimePredictionSynapse for a current/future prediction.
 
@@ -111,46 +107,12 @@ class Miner(BaseMinerNeuron):
         return synapse
     
 
-    async def forward_historic(self, synapse: HistoricPredictionSynapse) -> HistoricPredictionSynapse:
-        """
-        Processes the incoming HistoricPredictionSynapse based on its input data and optionally the location.
-        # NOTE: the location is likely to be near the middle of the box, but there is some gaussian noise in its location.
-
-        Args:
-            synapse (HistoricPredictionSynapse): The synapse object containing the input data.
-
-        Returns:
-            HistoricPredictionSynapse: The synapse object with the 'predictions' field set".
-        """
-
-        bt.logging.info(
-            f"Received historic request! Predicting {synapse.requested_hours} near {synapse.location}."
-        )
-        # shape (time, lat, lon) containing input temperature data
-        input_data = torch.Tensor(synapse.input_data)
-
-        ##########################################################################################################
-        # TODO (miner) you might want to do something more intelligent than repeating the last measurement
-        output = input_data[-1]
-        output = output.expand(synapse.requested_hours, *output.shape)
-        ##########################################################################################################
-        bt.logging.info(f"Output shape is {output.shape}")
-
-        synapse.predictions = output.tolist()
-        synapse.version = zeus_version
-        return synapse
-
-    async def blacklist_live(self, synapse: TimePredictionSynapse) -> typing.Tuple[bool, str]:
-        return await self.blacklist(synapse)
+    async def blacklist(self, synapse: TimePredictionSynapse) -> typing.Tuple[bool, str]:
+        return await self._blacklist(synapse)
     
-    async def blacklist_historic(self, synapse: HistoricPredictionSynapse) -> typing.Tuple[bool, str]:
-        return await self.blacklist(synapse)
+    async def priority(self, synapse: TimePredictionSynapse) -> float:
+        return await self._priority(synapse)
     
-    async def priority_live(self, synapse: TimePredictionSynapse) -> float:
-        return await self.priority(synapse)
-    
-    async def priority_historic(self, synapse: HistoricPredictionSynapse) -> float:
-        return await self.priority(synapse)
     
 
 # This is the main function, which runs the miner.

@@ -16,7 +16,6 @@ class Era5Sample:
         lat_end: float,
         lon_start: float,
         lon_end: float,
-        input_data: Optional[torch.Tensor] = None,
         output_data: Optional[torch.Tensor] = None,
         predict_hours: Optional[int] = None,
     ):
@@ -35,7 +34,6 @@ class Era5Sample:
         self.lon_start = lon_start
         self.lon_end = lon_end
 
-        self.input_data = input_data
         self.output_data = output_data
         self.predict_hours = predict_hours
        
@@ -46,32 +44,19 @@ class Era5Sample:
         elif predict_hours is None:
             raise ValueError("Either output data or predict hours must be provided.")
         
-        if self.input_data is not None and self.output_data is None:
-            raise ValueError("Input data can only be set in conjunction with output data")
 
     def get_bbox(self) -> Tuple[float]:
         return self.lat_start, self.lat_end, self.lon_start, self.lon_end
-    
-    def is_historic(self) -> bool:
-        return self.input_data is not None
 
-    def get_synapse(self) -> Union[TimePredictionSynapse, HistoricPredictionSynapse]:
+    def get_synapse(self) -> TimePredictionSynapse:
         """
         Converts the sample to a synapse which miners can predict on.
         Note that the output data is NOT set in this synapse.
         """
-        if self.is_historic():
-            return HistoricPredictionSynapse(
-                version=zeus_version,
-                location=gaussian_grid_sample(self.x_grid),
-                input_data=self.input_data.tolist(),
-                requested_hours=self.predict_hours
-            )
-        else:
-            return TimePredictionSynapse(
-                version=zeus_version,
-                locations=self.x_grid.tolist(),
-                start_time=self.start_timestamp,
-                end_time=self.end_timestamp,
-                requested_hours=self.predict_hours,
-            )
+        return TimePredictionSynapse(
+            version=zeus_version,
+            locations=self.x_grid.tolist(),
+            start_time=self.start_timestamp,
+            end_time=self.end_timestamp,
+            requested_hours=self.predict_hours,
+        )

@@ -92,26 +92,3 @@ class TimePredictionSynapse(PredictionSynapse):
         default=0.0,
         frozen=False,
     )
-
-
-class HistoricPredictionSynapse(PredictionSynapse):
-    """
-    Used for historic predictions which can directly be scored. 
-    Time is omitted to prevent hash-like lookups.
-    Location represent a point inside the box, but is not necessarily the middle (prevent gaming)
-    """
-
-    # Required request input, filled by sending dendrite caller.
-    input_data: List[List[List[float]]] = Field(
-        title="Input",
-        description="The tensor to be used as input for enviromental prediction.",
-        default=[],
-        frozen=False,
-    )
-   
-    location: Tuple[float, float] = Field(
-        title="Approximate location",
-        description="Location as [lat, lon] for a random point inside the input box.",
-        default=[],
-        frozen=False,
-    )

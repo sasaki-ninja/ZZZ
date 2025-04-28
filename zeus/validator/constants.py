@@ -24,8 +24,6 @@ ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 179.75)  # real ERA5 ranges
 # how many datapoints we want. The resolution is 0.25 degrees, so 4 means 1 degree.
 ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (4, 16)
 
-LIVE_CHALLENGE_PROB = 0.5
-
 # ------------------------------------------------------
 # --------------- Current/Future prediction-------------
 # ------------------------------------------------------
@@ -41,7 +39,7 @@ LIVE_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 25) # how many hours ahead w
 LIVE_START_SAMPLE_STD: float = 35 
 
 # ------------------------------------------------------
-# ------------------ Historic prediction----------------
+# ---------- Historic prediction (UNUSED) --------------
 # ------------------------------------------------------
 # ERA5 data loading constants
 GCLOUD_ERA5_URL: str = (

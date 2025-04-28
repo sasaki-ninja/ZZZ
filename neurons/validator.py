@@ -32,7 +32,6 @@ from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
 from zeus.data.era5.era5_cds import Era5CDSLoader
-from zeus.data.era5.era5_google import ERA5GoogleLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
 from zeus.validator.constants import (
@@ -54,9 +53,7 @@ class Validator(BaseValidatorNeuron):
         self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
 
-        self.google_loader = ERA5GoogleLoader()
         self.cds_loader = Era5CDSLoader()
-
         self.database = ResponseDatabase(self.cds_loader)
 
         self.difficulty_loader = DifficultyLoader()
