@@ -29,7 +29,7 @@ from zeus.data.sample import Era5Sample
 from zeus.data.era5.era5_cds import Era5CDSLoader
 from zeus.utils.misc import split_list
 from zeus.utils.time import timestamp_to_str
-from zeus.utils.coordinates import bbox_to_str
+from zeus.utils.coordinates import bbox_to_str, get_grid, slice_bbox
 from zeus.validator.reward import set_rewards
 from zeus.validator.miner_data import MinerData
 from zeus.utils.logging import maybe_reset_wandb
@@ -68,6 +68,8 @@ async def forward(self: BaseValidatorNeuron):
     bt.logging.success(
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
     )
+    global_bbox = get_grid(*data_loader.lat_range, *data_loader.lon_range)
+    synapse = sample.get_synapse(bbox_overwrite=global_bbox)
 
     miner_uids = self.uid_tracker.get_random_uids(
         k = self.config.neuron.sample_size,
@@ -81,10 +83,13 @@ async def forward(self: BaseValidatorNeuron):
     start_request = time.time()
     responses = await self.dendrite(
         axons=axons,
-        synapse=sample.get_synapse(),
+        synapse=synapse,
         deserialize=True,
         timeout=self.config.neuron.timeout,
     )
+    # slice response back to actual grid of interest
+    for i, response in enumerate(responses):
+        responses[i] = try_slice_prediction(sample, response)
 
     bt.logging.success(f"Responses received in {time.time() - start_request}s")
 
@@ -119,6 +124,20 @@ async def forward(self: BaseValidatorNeuron):
     maybe_reset_wandb(self)
     # Introduce a delay to prevent spamming requests
     time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start_forward)))
+
+
+def try_slice_prediction(sample: Era5Sample, prediction: torch.Tensor
+) -> torch.Tensor:
+    """
+    Slices miner's global output to actually match the challenge.
+
+    If a miner predicts wrong shape (which might crash the slicing),
+    simply leave unchanged for shape penalty later on
+    """
+    try:
+        return slice_bbox(prediction, sample.get_bbox(), lat_dim=1)
+    except:
+        return prediction
 
 def complete_challenge(
     self,
