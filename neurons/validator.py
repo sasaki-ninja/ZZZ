@@ -31,7 +31,8 @@ from zeus.validator.uid_tracker import UIDTracker
 from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
-from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.loaders.era5_cds import Era5CDSLoader
+from zeus.data.loaders.openmeteo import OpenMeteoLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
 from zeus.validator.constants import (
@@ -54,6 +55,7 @@ class Validator(BaseValidatorNeuron):
         self.validator_proxy = ValidatorProxy(self)
 
         self.cds_loader = Era5CDSLoader()
+        self.open_meteo_loader = OpenMeteoLoader()
         self.database = ResponseDatabase(self.cds_loader)
 
         self.difficulty_loader = DifficultyLoader()

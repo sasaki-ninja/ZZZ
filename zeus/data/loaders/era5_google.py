@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from zeus.data.era5.era5_base import Era5BaseLoader
+from zeus.data.loaders.era5_base import Era5BaseLoader
 from zeus.data.sample import Era5Sample
 from zeus.validator.constants import (
     GCLOUD_ERA5_URL,

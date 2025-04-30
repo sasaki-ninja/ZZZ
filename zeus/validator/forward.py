@@ -26,15 +26,15 @@ import numpy as np
 import torch
 
 from zeus.data.sample import Era5Sample
-from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.loaders.era5_cds import Era5CDSLoader
 from zeus.utils.misc import split_list
 from zeus.utils.time import timestamp_to_str
-from zeus.utils.coordinates import bbox_to_str, get_grid, slice_bbox
-from zeus.validator.reward import set_rewards
+from zeus.utils.coordinates import bbox_to_str
+from zeus.validator.reward import set_rewards, set_penalties
 from zeus.validator.miner_data import MinerData
 from zeus.utils.logging import maybe_reset_wandb
 from zeus.base.validator import BaseValidatorNeuron
-from zeus.validator.constants import FORWARD_DELAY_SECONDS, LIVE_CHALLENGE_PROB
+from zeus.validator.constants import FORWARD_DELAY_SECONDS
 
 
 async def forward(self: BaseValidatorNeuron):
@@ -57,7 +57,7 @@ async def forward(self: BaseValidatorNeuron):
     data_loader: Era5CDSLoader = self.cds_loader
     if not data_loader.is_ready():
         bt.logging.info("Data loader is not ready yet... Waiting until ERA5 data is downloaded.")
-        time.sleep(10)  # Don't need to spam above message
+        time.sleep(20)  # Don't need to spam above message
         return
 
     bt.logging.info(f"Sampling data...")
@@ -68,9 +68,11 @@ async def forward(self: BaseValidatorNeuron):
     bt.logging.success(
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
     )
-    global_bbox = get_grid(*data_loader.lat_range, *data_loader.lon_range)
-    synapse = sample.get_synapse(bbox_overwrite=global_bbox)
 
+    # get the baseline data, which we also store and check against
+    bt.logging.info("Fetching OpenMeteo baseline")
+    sample.output_data = self.open_meteo_loader.get_output(sample)
+  
     miner_uids = self.uid_tracker.get_random_uids(
         k = self.config.neuron.sample_size,
         tries = 3
@@ -83,24 +85,18 @@ async def forward(self: BaseValidatorNeuron):
     start_request = time.time()
     responses = await self.dendrite(
         axons=axons,
-        synapse=synapse,
+        synapse=sample.get_synapse(),
         deserialize=True,
         timeout=self.config.neuron.timeout,
     )
-    # slice response back to actual grid of interest
-    for i, response in enumerate(responses):
-        responses[i] = try_slice_prediction(sample, response)
 
     bt.logging.success(f"Responses received in {time.time() - start_request}s")
 
-    # Create a dummy output with the same shape as the sample's prediction grid to check for penalties
-    sample.output_data = torch.zeros(
-        sample.predict_hours, sample.x_grid.shape[0], sample.x_grid.shape[1]
-    )
-    miners_data = get_scored_miners(self, sample, miner_hotkeys, responses)
+    miners_data = parse_miner_inputs(self, sample, miner_hotkeys, responses)
     # Identify miners who should receive a penalty
     good_miners, bad_miners = split_list(miners_data, lambda m: not m.shape_penalty)
 
+    # penalise 
     if len(bad_miners) > 0:
         uids = [miner.uid for miner in bad_miners]
         self.uid_tracker.mark_finished(uids, good=False)
@@ -112,12 +108,13 @@ async def forward(self: BaseValidatorNeuron):
         do_wandb_logging(self, sample, bad_miners)
 
     if len(good_miners) > 0:
-         # store non-penalty miners for proxy
-        self.uid_tracker.mark_finished([m.uid for m in good_miners], good=True)
+        uids = [m.uid for m in good_miners]
+        # store non-penalty miners for proxy
+        self.uid_tracker.mark_finished(uids, good=True)
         hotkeys = [miner.hotkey for miner in good_miners]
         predictions = [miner.prediction for miner in good_miners]
       
-        bt.logging.success("Storing challenge and sensible miner responses in SQLite database")
+        bt.logging.success(f"Storing challenge and sensible miner responses in SQLite database: {uids}")
         self.database.insert(sample, hotkeys, predictions)
 
     # prevent W&B logs from becoming massive
@@ -126,52 +123,14 @@ async def forward(self: BaseValidatorNeuron):
     time.sleep(max(0, FORWARD_DELAY_SECONDS - (time.time() - start_forward)))
 
 
-def try_slice_prediction(sample: Era5Sample, prediction: torch.Tensor
-) -> torch.Tensor:
-    """
-    Slices miner's global output to actually match the challenge.
-
-    If a miner predicts wrong shape (which might crash the slicing),
-    simply leave unchanged for shape penalty later on
-    """
-    try:
-        return slice_bbox(prediction, sample.get_bbox(), lat_dim=1)
-    except:
-        return prediction
-
-def complete_challenge(
-    self,
-    sample: Era5Sample,
-    hotkeys: List[str],
-    predictions: List[torch.Tensor],
-) -> Optional[List[MinerData]]:
-    """
-    Complete a challenge by reward all miners. Based on hotkeys to also work for delayed rewarding.
-    Note that non-responding miners (which get a penalty) have already been excluded.
-    """
-
-    miners_data = get_scored_miners(self, sample, hotkeys, predictions)
-
-    self.update_scores(
-        [miner.reward for miner in miners_data],
-        [miner.uid for miner in miners_data],
-    )
-
-    for miner in miners_data:
-        bt.logging.success(
-            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
-        )
-    do_wandb_logging(self, sample, miners_data)
-
-
-def get_scored_miners(
+def parse_miner_inputs(
     self,
     sample: Era5Sample,
     hotkeys: List[str],
     predictions: List[torch.Tensor],
 ) -> List[MinerData]:
     """
-    Convert input to MinerData and calculate (and populate) their score/metrics fields.
+    Convert input to MinerData and calculate (and populate) their penalty fields.
     Return a list of MinerData
     """
     lookup = {axon.hotkey: uid for uid, axon in enumerate(self.metagraph.axons)}
@@ -183,12 +142,43 @@ def get_scored_miners(
         if uid is not None:
             miners_data.append(MinerData(uid=uid, hotkey=hotkey, prediction=prediction))
 
-    # score and reward just those miners
-    return set_rewards(
+    # pre-calculate penalities since we need those to filter
+    return set_penalties(
         output_data=sample.output_data,
-        miners_data=miners_data,
-        difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
+        miners_data=miners_data
     )
+
+
+def complete_challenge(
+    self,
+    sample: Era5Sample,
+    baseline: Optional[torch.Tensor],
+    hotkeys: List[str],
+    predictions: List[torch.Tensor],
+) -> Optional[List[MinerData]]:
+    """
+    Complete a challenge by reward all miners. Based on hotkeys to also work for delayed rewarding.
+    Note that non-responding miners (which get a penalty) have already been excluded.
+    """
+
+    miners_data = parse_miner_inputs(self, sample, hotkeys, predictions)
+    miners_data = set_rewards(
+        output_data=sample.output_data, 
+        miners_data=miners_data, 
+        baseline_data=baseline,
+        difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample)
+    )
+
+    self.update_scores(
+        [miner.reward for miner in miners_data],
+        [miner.uid for miner in miners_data],
+    )
+
+    for miner in miners_data:
+        bt.logging.debug(
+            f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
+        )
+    do_wandb_logging(self, sample, miners_data)
 
 
 def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):

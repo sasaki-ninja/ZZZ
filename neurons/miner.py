@@ -27,7 +27,7 @@ import openmeteo_requests
 import numpy as np
 from zeus.utils.misc import celcius_to_kelvin
 from zeus.utils.config import get_device_str
-from zeus.utils.time import get_timestamp
+from zeus.utils.time import to_timestamp
 from zeus.protocol import TimePredictionSynapse, HistoricPredictionSynapse
 from zeus.base.miner import BaseMinerNeuron
 from zeus import __version__ as zeus_version
@@ -71,10 +71,10 @@ class Miner(BaseMinerNeuron):
         """
         # shape (lat, lon, 2) so a grid of locations
         coordinates = torch.Tensor(synapse.locations)
-        start_time = get_timestamp(synapse.start_time)
-        end_time = get_timestamp(synapse.end_time)
+        start_time = to_timestamp(synapse.start_time)
+        end_time = to_timestamp(synapse.end_time)
         bt.logging.info(
-            f"Received current/future request! Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
+            f"Received request! Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
         )
 
         ##########################################################################################################
@@ -84,8 +84,8 @@ class Miner(BaseMinerNeuron):
             "latitude": latitudes.tolist(),
             "longitude": longitudes.tolist(),
             "hourly": "temperature_2m",
-            "start_date": start_time.strftime("%Y-%m-%d"),
-            "end_date": end_time.strftime("%Y-%m-%d"),
+            "start_hour": start_time.isoformat(timespec="minutes"),
+            "end_hour": end_time.isoformat(timespec="minutes"),
         }
         responses = self.openmeteo_api.weather_api(
             "https://api.open-meteo.com/v1/forecast", params=params
@@ -97,8 +97,6 @@ class Miner(BaseMinerNeuron):
         # OpenMeteo does Celcius, scoring is based on Kelvin
         output = celcius_to_kelvin(output)
 
-        # OpenMeteo returns full days, so slice, make sure end hour is included only for up-to-date validators.
-        output = output[start_time.hour : (-23 + end_time.hour)]
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")
 

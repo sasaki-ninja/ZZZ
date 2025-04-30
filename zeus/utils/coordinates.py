@@ -35,14 +35,14 @@ def get_bbox(
 
 
 def slice_bbox(
-    matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float], lat_dim:int=0,
+    matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float], lat_dim:int = 0,
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Slice the matrix to the given lat-lon bounding box. This assumes that the matrix is of shape (180 * fidelity + 1, 360 * fidelity, ...).
     NOTE: it is also assumed that coordinates are in the range of -90 to 90 for latitude and -180 to 179.75 for longitude.
 
     Lat_dim can optionally be used to specify the dimension of the latitude data (defaults to 0)
-    longitude dimension is assumed to be lat_dim + 1.
+     longitude dimension is assumed to be lat_dim + 1.
     """
 
     fidelity = matrix.shape[1] // 360
@@ -53,8 +53,8 @@ def slice_bbox(
     lon_start_idx = int((180 + lon_start) * fidelity)
     lon_end_idx = int((180 + lon_end) * fidelity)
 
-    matrix = matrix.gather(lat_dim, torch.arange(lat_start_idx, lat_end_idx + 1))
-    return matrix.gather(lat_dim + 1, torch.arange(lon_start_idx, lon_end_idx + 1))
+    matrix = matrix.narrow(lat_dim, lat_start_idx, lat_end_idx - lat_start_idx + 1)
+    return matrix.narrow(lat_dim + 1, lon_start_idx, lon_end_idx - lon_start_idx + 1)
 
 def get_grid(
     lat_start: float,

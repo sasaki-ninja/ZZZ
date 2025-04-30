@@ -4,10 +4,9 @@ import time
 import torch
 import json
 
-from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.loaders.era5_cds import Era5CDSLoader
 from zeus.validator.constants import DATABASE_LOCATION
 from zeus.data.sample import Era5Sample
-from zeus.utils.coordinates import get_bbox
 
 
 class ResponseDatabase:
@@ -49,10 +48,14 @@ class ResponseDatabase:
                     lon_end REAL,
                     start_timestamp REAL,
                     end_timestamp REAL,
-                    hours_to_predict INTEGER
+                    hours_to_predict INTEGER,
+                    baseline TEXT
                 );
                 """
             )
+            # migrate from v0.x -> v1.0.0
+            if not column_exists(cursor, "challenges", "baseline"):
+                cursor.execute("ALTER TABLE challenges ADD COLUMN baseline TEXT;")
 
             # miner responses, we will use JSON for the tensor.
             cursor.execute(
@@ -82,19 +85,21 @@ class ResponseDatabase:
     def _insert_challenge(self, sample: Era5Sample) -> int:
         """
         Insert a sample into the database and return the challenge UID.
+        Assumes the sample's output data is the baseline.
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO challenges (lat_start, lat_end, lon_start, lon_end, start_timestamp, end_timestamp, hours_to_predict)
-                VALUES (?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO challenges (lat_start, lat_end, lon_start, lon_end, start_timestamp, end_timestamp, hours_to_predict, baseline)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     *sample.get_bbox(),
                     sample.start_timestamp,
                     sample.end_timestamp,
                     sample.predict_hours,
+                    json.dumps(sample.output_data.tolist())
                 ),
             )
             challenge_uid = cursor.lastrowid
@@ -130,7 +135,7 @@ class ResponseDatabase:
             conn.commit()
 
     def score_and_prune(
-        self, score_func: Callable[[Era5Sample, List[str], List[torch.Tensor]], None]
+        self, score_func: Callable[[Era5Sample, torch.Tensor, List[str], List[torch.Tensor]], None]
     ):
         """
         Check the database for challenges and responses, and prune them if they are not needed anymore.
@@ -152,10 +157,9 @@ class ResponseDatabase:
             challenges = cursor.fetchall()
 
         for i, challenge in enumerate(challenges):
-            challenge_uid = challenge[0]
-
             # load the sample
             (
+                challenge_uid,
                 lat_start,
                 lat_end,
                 lon_start,
@@ -163,7 +167,9 @@ class ResponseDatabase:
                 start_timestamp,
                 end_timestamp,
                 hours_to_predict,
-            ) = challenge[1:]
+                baseline,
+            ) = challenge
+
             sample = Era5Sample(
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp,
@@ -178,6 +184,9 @@ class ResponseDatabase:
             if output is None or output.shape[0] != hours_to_predict:
                 continue
             sample.output_data = output
+
+            if baseline is not None:
+                baseline = torch.tensor(json.loads(baseline))
 
             # load the miner predictions
             with sqlite3.connect(self.db_path) as conn:
@@ -196,7 +205,7 @@ class ResponseDatabase:
                 ]
 
             # don't score while database is open in case there is a metagraph delay.
-            score_func(sample, miner_hotkeys, predictions)
+            score_func(sample, baseline, miner_hotkeys, predictions)
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -218,3 +227,10 @@ class ResponseDatabase:
             # don't score miners too quickly in succession and always wait after last scoring
             if i > 0:
                 time.sleep(4)
+
+
+
+def column_exists(cursor: sqlite3.Cursor, table_name: str, column_name: str):
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in cursor.fetchall()]
+    return column_name in columns

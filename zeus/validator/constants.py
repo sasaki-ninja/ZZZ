@@ -15,14 +15,20 @@ PROXY_QUERY_K = 10
 # wandb website refuses to update logs after roughly 100k, so reset run if this happens
 WANDB_MAX_LOGS = 95_000
 
-# 1.0 would imply no difficulty scaling, should be >= 1.
-REWARD_DIFFICULTY_SCALER = 3.0
-
 ERA5_DATA_VARS: List[str] = ["2m_temperature"]
 ERA5_LATITUDE_RANGE: Tuple[float, float] = (-90.0, 90.0)
 ERA5_LONGITUDE_RANGE: Tuple[float, float] = (-180.0, 179.75)  # real ERA5 ranges
 # how many datapoints we want. The resolution is 0.25 degrees, so 4 means 1 degree.
 ERA5_AREA_SAMPLE_RANGE: Tuple[float, float] = (4, 16)
+
+# ------------------------------------------------------
+# ------------------ Reward Constants -----------------
+# ------------------------------------------------------
+# 1.0 would imply no difficulty scaling, should be >= 1.
+REWARD_DIFFICULTY_SCALER = 3.0
+
+REWARD_IMPROVEMENT_WEIGHT = 0.5 # 50% of emission for improving SOTA
+REWARD_IMPROVEMENT_MIN_DELTA = 0.1 # RMSE improvement over OpenMeteo only counts if more than this
 
 # ------------------------------------------------------
 # --------------- Current/Future prediction-------------
@@ -37,6 +43,8 @@ LIVE_HOURS_PREDICT_RANGE: Tuple[float, float] = (1, 25) # how many hours ahead w
 
 # see plot of distribution in Zeus/static/era5_start_offset_distribution.png
 LIVE_START_SAMPLE_STD: float = 35 
+
+OPEN_METEO_URL: str = "https://customer-api.open-meteo.com/v1/forecast"
 
 # ------------------------------------------------------
 # ---------- Historic prediction (UNUSED) --------------

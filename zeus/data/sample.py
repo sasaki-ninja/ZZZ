@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, Union, List
 import torch
 
-from zeus.utils.coordinates import get_grid, gaussian_grid_sample
+from zeus.utils.coordinates import get_grid
 from zeus.protocol import TimePredictionSynapse
 from zeus import __version__ as zeus_version
 
@@ -44,14 +44,14 @@ class Era5Sample:
     def get_bbox(self) -> Tuple[float]:
         return self.lat_start, self.lat_end, self.lon_start, self.lon_end
 
-    def get_synapse(self, bbox_overwrite: Optional[List] = None) -> TimePredictionSynapse:
+    def get_synapse(self) -> TimePredictionSynapse:
         """
         Converts the sample to a synapse which miners can predict on.
         Note that the output data is NOT set in this synapse.
         """
         return TimePredictionSynapse(
             version=zeus_version,
-            locations=bbox_overwrite or self.x_grid.tolist(),
+            locations=self.x_grid.tolist(),
             start_time=self.start_timestamp,
             end_time=self.end_timestamp,
             requested_hours=self.predict_hours,
