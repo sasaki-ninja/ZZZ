@@ -33,7 +33,6 @@ def get_bbox(
     lon_end = tensor[0, -1, 1].item()
     return lat_start, lat_end, lon_start, lon_end
 
-
 def slice_bbox(
     matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float], lat_dim:int = 0,
 ) -> Union[np.ndarray, torch.Tensor]:
@@ -53,9 +52,13 @@ def slice_bbox(
     lon_start_idx = int((180 + lon_start) * fidelity)
     lon_end_idx = int((180 + lon_end) * fidelity)
 
-    matrix = matrix.narrow(lat_dim, lat_start_idx, lat_end_idx - lat_start_idx + 1)
-    return matrix.narrow(lat_dim + 1, lon_start_idx, lon_end_idx - lon_start_idx + 1)
+    # slice across specified dimensions only
+    sl = [slice(None)] * matrix.ndim
+    sl[lat_dim] = slice(lat_start_idx, lat_end_idx + 1)
+    sl[lat_dim + 1] = slice(lon_start_idx, lon_end_idx + 1)
 
+    return matrix[tuple(sl)]
+    
 def get_grid(
     lat_start: float,
     lat_end: float,

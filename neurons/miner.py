@@ -28,7 +28,7 @@ import numpy as np
 from zeus.utils.misc import celcius_to_kelvin
 from zeus.utils.config import get_device_str
 from zeus.utils.time import to_timestamp
-from zeus.protocol import TimePredictionSynapse, HistoricPredictionSynapse
+from zeus.protocol import TimePredictionSynapse
 from zeus.base.miner import BaseMinerNeuron
 from zeus import __version__ as zeus_version
 

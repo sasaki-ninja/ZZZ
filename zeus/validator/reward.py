@@ -153,8 +153,8 @@ def set_rewards(
     """
     miners_data = [m for m in miners_data if not m.shape_penalty]
 
-    if len(miner_data) == 0:
-        return miner_data
+    if len(miners_data) == 0:
+        return miners_data
 
     # old challenges have no baseline, use 0 to make it not affect scoring.
     baseline_rmse = 0

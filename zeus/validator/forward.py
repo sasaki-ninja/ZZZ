@@ -160,7 +160,7 @@ def complete_challenge(
     Complete a challenge by reward all miners. Based on hotkeys to also work for delayed rewarding.
     Note that non-responding miners (which get a penalty) have already been excluded.
     """
-
+    
     miners_data = parse_miner_inputs(self, sample, hotkeys, predictions)
     miners_data = set_rewards(
         output_data=sample.output_data, 
