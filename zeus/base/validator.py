@@ -26,16 +26,19 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
+from abc import abstractmethod
 
 from typing import List, Union
-from traceback import print_exception
+from traceback import format_exception
 
 from zeus.base.neuron import BaseNeuron
+from zeus.utils.uids import check_uid_availability
 from zeus.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
 from zeus.utils.config import add_validator_args
+from zeus.validator.constants import MAINNET_UID
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -57,10 +60,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
-        if self.config.mock:
-            pass
-        else:
-            self.dendrite = bt.dendrite(wallet=self.wallet)
+        self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation
@@ -170,11 +170,18 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.success("Validator killed by keyboard interrupt.")
             exit()
 
-        # In case of unforeseen errors, the validator will log the error and continue operations.
+        # In case of unforeseen errors, the validator will log the error and restart.
         except Exception as err:
-            bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
-            self.should_exit = True            
+            err_message = ''.join(format_exception(type(err), err, err.__traceback__))
+            self.should_exit = True
+            self.on_error(err, err_message)
+
+    def on_error(self, error: Exception, error_message: str):
+        """
+        Invoked when a validator encounters an exception during the run
+        """
+        bt.logging.error(f"Error during validation: {str(error)}")
+        bt.logging.error(error_message)
 
     def run_in_background_thread(self):
         """
@@ -357,7 +364,17 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         scattered_rewards: np.ndarray = self.scores.copy()
+        vali_or_nonserve_uids = [
+            uid for uid in range(len(scattered_rewards)) if
+            not check_uid_availability(
+                metagraph=self.metagraph, 
+                uid=uid,
+                vpermit_tao_limit=self.config.neuron.vpermit_tao_limit,
+                mainnet_uid=MAINNET_UID
+            )
+        ]
         scattered_rewards[uids_array] = rewards
+        scattered_rewards[vali_or_nonserve_uids] = 0.
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.

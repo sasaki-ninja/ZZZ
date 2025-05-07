@@ -11,16 +11,17 @@ import torch
 import cdsapi
 import pandas as pd
 import bittensor as bt
-from dotenv import load_dotenv
 
-from zeus.data.era5.era5_base import Era5BaseLoader
+from zeus.data.loaders.era5_base import Era5BaseLoader
 from zeus.data.sample import Era5Sample
-from zeus.utils.time import get_today, get_timestamp
+from zeus.utils.time import get_today, to_timestamp
 from zeus.validator.constants import (
     ERA5_CACHE_DIR,
     COPERNICUS_ERA5_URL,
-    ERA5_START_SAMPLE_STD,
-    ERA5_UNIFORM_START_OFFSET_PROB
+    LIVE_HOURS_PREDICT_RANGE,
+    LIVE_START_SAMPLE_STD,
+    LIVE_UNIFORM_START_OFFSET_PROB,
+    LIVE_START_OFFSET_RANGE
 )
 
 class Era5CDSLoader(Era5BaseLoader):
@@ -31,19 +32,18 @@ class Era5CDSLoader(Era5BaseLoader):
         self,
         cache_dir: Path = ERA5_CACHE_DIR,
         copernicus_url: str = COPERNICUS_ERA5_URL,
-        start_sample_std: float = ERA5_START_SAMPLE_STD,
-        uniform_start_prob: float = ERA5_UNIFORM_START_OFFSET_PROB,
+        start_sample_std: float = LIVE_START_SAMPLE_STD,
+        uniform_start_prob: float = LIVE_UNIFORM_START_OFFSET_PROB,
+        start_offset_range: Tuple[int, int] = LIVE_START_OFFSET_RANGE,
         **kwargs,
     ) -> None:
-        load_dotenv(
-            os.path.join(
-                os.path.abspath(os.path.dirname(__file__)), "../../validator.env"
-            )
-        )
+        
         self.cds_api_key = os.getenv("CDS_API_KEY")
         self.client = cdsapi.Client(
-            url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False
+            url=copernicus_url, key=self.cds_api_key, quiet=True, progress=False, warning_callback=lambda _: None,
         )
+        # temporarily muted to remove confusing warning
+        self.client.warning_callback = None
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir: Path = cache_dir
@@ -52,8 +52,9 @@ class Era5CDSLoader(Era5BaseLoader):
 
         self.start_sample_std = start_sample_std
         self.uniform_start_prob = uniform_start_prob
+        self.start_offset_range = start_offset_range
 
-        super().__init__(**kwargs)
+        super().__init__(predict_sample_range=LIVE_HOURS_PREDICT_RANGE, **kwargs)
 
     def is_ready(self) -> bool:
         """
@@ -125,13 +126,13 @@ class Era5CDSLoader(Era5BaseLoader):
         )
 
     def get_output(self, sample: Era5Sample) -> Optional[torch.Tensor]:
-        end_time = get_timestamp(sample.end_timestamp)
+        end_time = to_timestamp(sample.end_timestamp)
         if end_time > self.last_stored_timestamp:
             return None
 
         data4d: torch.Tensor = self.get_data(
             *sample.get_bbox(),
-            start_time=get_timestamp(sample.start_timestamp),
+            start_time=to_timestamp(sample.start_timestamp),
             end_time=end_time,
         )
         # Slice off the latitude and longitude for the output

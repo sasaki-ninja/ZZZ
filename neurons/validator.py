@@ -20,17 +20,19 @@
 
 import time
 import os
-import signal
+from discord_webhook import DiscordWebhook, DiscordEmbed
 
 import bittensor as bt
 import wandb
+from dotenv import load_dotenv
 
 import zeus
 from zeus.validator.uid_tracker import UIDTracker
 from zeus.api.proxy import ValidatorProxy
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.forward import forward
-from zeus.data.era5.era5_cds import Era5CDSLoader
+from zeus.data.loaders.era5_cds import Era5CDSLoader
+from zeus.data.loaders.openmeteo import OpenMeteoLoader
 from zeus.data.difficulty_loader import DifficultyLoader
 from zeus.validator.database import ResponseDatabase
 from zeus.validator.constants import (
@@ -39,24 +41,21 @@ from zeus.validator.constants import (
 
 
 class Validator(BaseValidatorNeuron):
-    """
-    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
-
-    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
-    """
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
         self.load_state()
 
+        load_dotenv(
+            os.path.join(os.path.abspath(os.path.dirname(__file__)), "../validator.env")
+        )
+        self.discord_hook = os.environ.get("DISCORD_WEBHOOK")
+
         self.uid_tracker = UIDTracker(self)
         self.validator_proxy = ValidatorProxy(self)
 
-        #self.google_loader = ERA5GoogleLoader()
         self.cds_loader = Era5CDSLoader()
-
+        self.open_meteo_loader = OpenMeteoLoader()
         self.database = ResponseDatabase(self.cds_loader)
 
         self.difficulty_loader = DifficultyLoader()
@@ -76,6 +75,27 @@ class Validator(BaseValidatorNeuron):
     def __exit__(self, exc_type, exc_value, traceback):
         super().__exit__(exc_type, exc_value, traceback)
         self.validator_proxy.stop_server()
+
+
+    def on_error(self, error: Exception, error_message: str):
+        super().on_error(error, error_message)
+
+        if not self.discord_hook:
+            return
+        
+        webhook = DiscordWebhook(
+            url=self.discord_hook, 
+            avatar_url="https://raw.githubusercontent.com/Orpheus-AI/Zeus/refs/heads/v1/static/zeus-icon.png",
+            username="Zeus Subnet Bot",
+            content=f"Your validator had an error -- see below!",
+            timeout=5,
+        )
+        embed = DiscordEmbed(title=repr(error), description=error_message)
+        embed.set_timestamp()
+        if wandb.run and not wandb.run.offline:
+            embed.add_embed_field(name="", value=f"[WANDB]({wandb.run.get_url()}/logs)", inline=False)
+        webhook.add_embed(embed)
+        webhook.execute()
 
     def init_wandb(self):
         if self.config.wandb.off:

@@ -16,11 +16,15 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-from typing import List, Tuple, Dict
+from typing import List, Optional
 import numpy as np
 import torch
 from zeus.validator.miner_data import MinerData
-from zeus.validator.constants import REWARD_DIFFICULTY_SCALER
+from zeus.validator.constants import (
+    REWARD_DIFFICULTY_SCALER,  
+    REWARD_IMPROVEMENT_WEIGHT,
+    REWARD_IMPROVEMENT_MIN_DELTA
+)
 
 
 def help_format_miner_output(
@@ -74,59 +78,104 @@ def get_shape_penalty(correct: torch.Tensor, response: torch.Tensor) -> bool:
 
     return penalty
 
+def rmse(
+        output_data: torch.Tensor,
+        prediction: torch.Tensor,
+) -> float:
+    """Calculates RMSE between miner prediction and correct output"""
+    return ((prediction - output_data) ** 2).mean().sqrt().item()
+
+def set_penalties(
+    output_data: torch.Tensor,
+    miners_data: List[MinerData],
+) -> List[MinerData]:
+    """
+    Calculates and sets penalities for miners based on correct shape and their prediction
+
+    Args:
+        output_data (torch.Tensor): ground truth, ONLY used for shape
+        miners_data (List[MinerData]): List of MinerData objects containing predictions.
+
+    Returns:
+        List[MinerData]: List of MinerData objects with penalty fields
+    """
+    for miner_data in miners_data:
+        # potentially fix inputs for miners
+        miner_data.prediction = help_format_miner_output(output_data, miner_data.prediction)
+        shape_penalty = get_shape_penalty(output_data, miner_data.prediction)
+        # set penalty, including rmse/reward if there is a penalty
+        miner_data.shape_penalty = shape_penalty
+    
+    return miners_data
+
+
+def get_curved_scores(raw_scores: List[float], gamma: float) -> List[float]:
+    """
+    Given a list of raw float scores (can by any range),
+    normalise them to 0-1 scores,
+    and apply gamma correction to curve accordingly.
+
+    This function assumes lower is better
+    """
+    min_score = min(raw_scores)
+    max_score = max(raw_scores)
+
+    result = []
+    for score in raw_scores:
+        if max_score == min_score:
+            result.append(1.0) # edge case, avoid division by 0
+        else:
+            norm_rmse = (max_score - score) / (max_score - min_score)
+            result.append(np.power(norm_rmse, gamma)) # apply gamma correction
+    
+    return result
+    
 
 def set_rewards(
     output_data: torch.Tensor,
     miners_data: List[MinerData],
+    baseline_data: Optional[torch.Tensor],
     difficulty_grid: np.ndarray,
 ) -> List[MinerData]:
     """
     Calculates rewards for miner predictions based on RMSE and relative difficulty.
+    NOTE: it is assumed penalties have already been scored and filtered out, 
+      if not will do so without scoring those
 
     Args:
         output_data (torch.Tensor): The ground truth data.
         miners_data (List[MinerData]): List of MinerData objects containing predictions.
-        difficulty_grid (np.ndarray): Difficulty grid for each coordinate. Currenly not used.
+        baseline_data (torch.Tensor): OpenMeteo prediction, where additional incentive is awarded to beat this!
+        difficulty_grid (np.ndarray): Difficulty grid for each coordinate.
 
     Returns:
         List[MinerData]: List of MinerData objects with updated rewards and metrics.
     """
-    rmse_values = []
+    miners_data = [m for m in miners_data if not m.shape_penalty]
 
-    # compute unnormalised scores and penalties
-    for miner_data in miners_data:
-        prediction = help_format_miner_output(output_data, miner_data.prediction)
-        shape_penalty = get_shape_penalty(output_data, prediction)
-
-        if shape_penalty:
-            rmse = -1.0  # Using -1.0 to indicate penalty.
-        else:
-            rmse = torch.sqrt(torch.mean((prediction - output_data) ** 2)).item()
-            rmse_values.append(rmse)
-       
-        miner_data.shape_penalty = shape_penalty
-        miner_data.rmse = rmse
-
-    # if everybody got a shape penalty, set all scores to 0
-    if not rmse_values:
-        for miner_data in miners_data:
-            miner_data.reward = 0.0
+    if len(miners_data) == 0:
         return miners_data
 
-    min_rmse = min(rmse_values)
-    max_rmse = max(rmse_values)
-
+    # old challenges have no baseline, use 0 to make it not affect scoring.
+    baseline_rmse = 0
+    if baseline_data is not None:
+        baseline_rmse = rmse(output_data, baseline_data)
+        
     avg_difficulty = difficulty_grid.mean()
     # make difficulty [-1, 1], then go between [1/scaler, scaler]
     gamma = np.power(REWARD_DIFFICULTY_SCALER, avg_difficulty * 2 - 1)
 
+    # compute unnormalised scores
     for miner_data in miners_data:
-        if miner_data.shape_penalty:
-            miner_data.reward = 0.0
-        else:
-            if max_rmse == min_rmse:
-                miner_data.reward = 1.0
-            else:
-                norm_rmse = (max_rmse - miner_data.rmse) / (max_rmse - min_rmse)
-                miner_data.reward = np.power(norm_rmse, gamma) # apply gamma correction
+        miner_data.rmse = rmse(output_data, miner_data.prediction)
+        improvement = baseline_rmse - miner_data.rmse - REWARD_IMPROVEMENT_MIN_DELTA
+        miner_data.baseline_improvement = max(0, improvement)
+
+    quality_scores = get_curved_scores([m.rmse for m in miners_data], gamma)
+    # negative since curving assumes minimal is the best
+    improvement_scores = get_curved_scores([-m.baseline_improvement for m in miners_data], gamma)
+
+    for miner_data, quality, improvement in zip(miners_data, quality_scores, improvement_scores):
+        miner_data.reward = (1 - REWARD_IMPROVEMENT_WEIGHT) * quality + REWARD_IMPROVEMENT_WEIGHT * improvement
+
     return miners_data
