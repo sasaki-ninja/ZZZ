@@ -83,7 +83,11 @@ def rmse(
         prediction: torch.Tensor,
 ) -> float:
     """Calculates RMSE between miner prediction and correct output"""
-    return ((prediction - output_data) ** 2).mean().sqrt().item()
+    try:
+        return ((prediction - output_data) ** 2).mean().sqrt().item()
+    except:
+        # shape error etc
+        return -1.0
 
 def set_penalties(
     output_data: torch.Tensor,

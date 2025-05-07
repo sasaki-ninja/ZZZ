@@ -30,7 +30,7 @@ from zeus.data.loaders.era5_cds import Era5CDSLoader
 from zeus.utils.misc import split_list
 from zeus.utils.time import timestamp_to_str
 from zeus.utils.coordinates import bbox_to_str
-from zeus.validator.reward import set_rewards, set_penalties
+from zeus.validator.reward import set_rewards, set_penalties, rmse
 from zeus.validator.miner_data import MinerData
 from zeus.utils.logging import maybe_reset_wandb
 from zeus.base.validator import BaseValidatorNeuron
@@ -178,10 +178,15 @@ def complete_challenge(
         bt.logging.debug(
             f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
         )
-    do_wandb_logging(self, sample, miners_data)
+    do_wandb_logging(self, sample, miners_data, baseline)
 
 
-def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):
+def do_wandb_logging(
+        self, 
+        challenge: Era5Sample, 
+        miners_data: List[MinerData], 
+        baseline: Optional[torch.Tensor] = None
+    ):
     if self.config.wandb.off:
         return
     
@@ -198,6 +203,7 @@ def do_wandb_logging(self, challenge: Era5Sample, miners_data: List[MinerData]):
             "end_timestamp": challenge.end_timestamp,
             "predict_hours": challenge.predict_hours,
             "lat_lon_bbox": challenge.get_bbox(),
+            "baseline_rmse": rmse(challenge.output_data, baseline),
             "uid_to_hotkey": uid_to_hotkey,
         },
     )
