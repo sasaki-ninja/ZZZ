@@ -38,11 +38,8 @@ class Miner(BaseMinerNeuron):
     Your miner neuron class. You should use this class to define your miner's behavior.
     In particular, you should replace the forward function with your own logic.
 
-    Currently the base miner does a request to OpenMeteo (https://open-meteo.com/) for current/future ('live') predictions.
+    Currently the base miner does a request to OpenMeteo (https://open-meteo.com/) for predictions.
     You are encouraged to attempt to improve over this by changing the forward function.
-
-    For historic predictions, the base miner simply repeats the last hour of input data to match the required shape.
-    To be competitive, you will need to implement your own intelligent forecasting model for this reduced-data setting.
     """
 
     def __init__(self, config=None):
@@ -61,7 +58,7 @@ class Miner(BaseMinerNeuron):
 
     async def forward(self, synapse: TimePredictionSynapse) -> TimePredictionSynapse:
         """
-        Processes the incoming TimePredictionSynapse for a current/future prediction.
+        Processes the incoming TimePredictionSynapse for a prediction.
 
         Args:
             synapse (TimePredictionSynapse): The synapse object containing the time range and coordinates

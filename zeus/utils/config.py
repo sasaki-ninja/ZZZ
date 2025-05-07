@@ -115,13 +115,6 @@ def add_args(cls, parser):
         default=False,
     )
 
-    parser.add_argument(
-        "--wandb.notes",
-        type=str,
-        help="Notes to add to the wandb run.",
-        default="",
-    )
-
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""

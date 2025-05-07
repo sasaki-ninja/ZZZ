@@ -78,15 +78,22 @@ AXON_PORT=
 PROXY_PORT=
 
 # API Keys:
-WANDB_API_KEY=      # https://wandb.ai/authorize
-CDS_API_KEY =       # https://github.com/Orpheus-AI/Zeus/blob/main/docs/Validating.md#ecmwf
-PROXY_API_KEY=      # Your Proxy API Key, you can generate it yourself
+WANDB_API_KEY=                  # https://wandb.ai/authorize
+CDS_API_KEY=                    # https://github.com/Orpheus-AI/Zeus/blob/main/docs/Validating.md#ecmwf
+OPEN_METEO_API_KEY=             # https://open-meteo.com/en/pricing#plans (Cheapest one suffices)
+PROXY_API_KEY=                  # Your Proxy API Key, you can generate it yourself
+
+# Optional integrations
+DISCORD_WEBHOOK=                # https://www.svix.com/resources/guides/how-to-make-webhook-discord/
 ```
 If you don't have a W&B API key, please reach out to Ørpheus A.I. via Discord. Without W&B, miners will not be able to see their live scores, 
 so we highly recommend enabling this.
 
+### 1. OpenMeteo
+In order to validate you need an [OpenMeteo API key](https://open-meteo.com/en/pricing) for the API standard plan. After purchasing, it will be send to your email address!
+So look out for an email from info@open-meteo.com. Please enter the API key in the validator.env file, under the key `OPEN_METEO_API_KEY=mykey`.
 
-### ECMWF
+### 2. ECMWF
 > [!IMPORTANT]
 > In order to send miners challenges involving the latest ERA5 data, you need to provide a Copernicus CDS API key. The steps below explain how to obtain this key. If you encounter any difficulty in the process, please let us know and we will create an account for you.
 
