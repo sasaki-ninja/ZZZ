@@ -1,7 +1,7 @@
 <p align="center">
   <img src="static/zeus-icon.png" alt="Zeus Logo" width="150"/>
 </p>
-<h1 align="center">Zeus Environmental Forecasting Subnet<br><small>Ørpheus AI</small></h1>
+<h1 align="center">SN18: Zeus Environmental Forecasting Subnet<br><small>Ørpheus AI</small></h1>
 
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)

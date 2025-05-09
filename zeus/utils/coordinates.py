@@ -5,6 +5,7 @@ from check_shapes import check_shapes
 import torch
 import torch.nn.functional as F
 
+from zeus.validator.constants import ERA5_AREA_SAMPLE_RANGE
 
 def bbox_to_str(bbox: Tuple[Union[float, np.number]]) -> str:
     """
@@ -32,13 +33,15 @@ def get_bbox(
     lon_end = tensor[0, -1, 1].item()
     return lat_start, lat_end, lon_start, lon_end
 
-
 def slice_bbox(
-    matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float]
+    matrix: Union[np.ndarray, torch.Tensor], bbox: Tuple[float, float, float, float], lat_dim:int = 0,
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Slice the matrix to the given lat-lon bounding box. This assumes that the matrix is of shape (180 * fidelity + 1, 360 * fidelity, ...).
     NOTE: it is also assumed that coordinates are in the range of -90 to 90 for latitude and -180 to 179.75 for longitude.
+
+    Lat_dim can optionally be used to specify the dimension of the latitude data (defaults to 0)
+     longitude dimension is assumed to be lat_dim + 1.
     """
 
     fidelity = matrix.shape[1] // 360
@@ -49,9 +52,13 @@ def slice_bbox(
     lon_start_idx = int((180 + lon_start) * fidelity)
     lon_end_idx = int((180 + lon_end) * fidelity)
 
-    return matrix[lat_start_idx : lat_end_idx + 1, lon_start_idx : lon_end_idx + 1, ...]
+    # slice across specified dimensions only
+    sl = [slice(None)] * matrix.ndim
+    sl[lat_dim] = slice(lat_start_idx, lat_end_idx + 1)
+    sl[lat_dim + 1] = slice(lon_start_idx, lon_end_idx + 1)
 
-
+    return matrix[tuple(sl)]
+    
 def get_grid(
     lat_start: float,
     lat_end: float,
@@ -73,14 +80,29 @@ def get_grid(
         dim=-1,
     )  # (lat, lon, 2)
 
+@check_shapes(
+    "grid: [lat, lon, 2]",
+    "return: [2]",
+)
+def gaussian_grid_sample(grid: Union[torch.Tensor, np.ndarray], stds_in_radius = 3) -> Tuple[float, float]:
+    lat, lon = grid.shape[:2]
+
+    while True:
+        # 91% within 2 stds on both axis
+        i = round(np.random.normal(lat / 2, (lat / 2 / stds_in_radius) ** 2))
+        j = round(np.random.normal(lon / 2, (lon / 2 / stds_in_radius) ** 2))
+
+        if 0 <= i < lat and 0 <= j < lon:
+            return grid[i, j]
+
 
 def expand_to_grid(
-    lat: float, lon: float, fidelity: float = 4
+    lat: float, lon: float, fidelity: float = 4, min_size = ERA5_AREA_SAMPLE_RANGE[0],
 ) -> torch.Tensor:
     """
     Get a grid of lat-lon points for a single location based on the specified fidelity (degree).
-    If the specified lat or lon coordinate are exactly on a grid point that dimension will be 3,
-    otherwise it will be 2.
+    If the specified lat or lon coordinate are exactly on a grid point that dimension will be min_size + 1,
+    otherwise it will be of min_size.
     The output grid will have the same shape structure as the get_grid function.
     """
     lat_start = math.floor(lat * fidelity) / fidelity
@@ -97,7 +119,12 @@ def expand_to_grid(
         lon_start -= 1 / fidelity
         lon_end += 1 / fidelity
 
-    return get_grid(lat_start, lat_end, lon_start, lon_end, fidelity)
+    expand = max(0, (min_size - 2) // 2) / fidelity
+    return get_grid(
+        lat_start - expand, lat_end + expand, 
+        lon_start - expand, lon_end + expand,
+        fidelity=fidelity
+    )
 
 @check_shapes(
     "input: [time, lat, lon]",

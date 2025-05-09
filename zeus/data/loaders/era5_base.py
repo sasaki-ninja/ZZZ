@@ -10,10 +10,7 @@ from zeus.validator.constants import (
     ERA5_DATA_VARS,
     ERA5_LATITUDE_RANGE,
     ERA5_LONGITUDE_RANGE,
-    ERA5_DATE_RANGE,
     ERA5_AREA_SAMPLE_RANGE,
-    ERA5_START_OFFSET_RANGE,
-    ERA5_HOURS_PREDICT_RANGE,
 )
 
 
@@ -21,24 +18,19 @@ class Era5BaseLoader(ABC):
 
     def __init__(
         self,
+        predict_sample_range: Tuple[float, float],
         data_vars: List[str] = ERA5_DATA_VARS,
         lat_range: Tuple[float, float] = ERA5_LATITUDE_RANGE,
         lon_range: Tuple[float, float] = ERA5_LONGITUDE_RANGE,
-        date_range: Tuple[str, str] = ERA5_DATE_RANGE,
-        area_sample_range: Tuple[ float, float] = ERA5_AREA_SAMPLE_RANGE,
-        start_offset_range: Tuple[int, int] = ERA5_START_OFFSET_RANGE,
-        predict_sample_range: Tuple[float, float] = ERA5_HOURS_PREDICT_RANGE,
-        noise_factor: float = 1e-3,
+        area_sample_range: Tuple[ float, float] = ERA5_AREA_SAMPLE_RANGE
+
     ) -> None:
         self.data_vars = data_vars
-        self.noise_factor = noise_factor
 
         self.lat_range = sorted(lat_range)
         self.lon_range = sorted(lon_range)
-        self.date_range = list(map(pd.to_datetime, sorted(date_range)))
 
         self.area_sample_range = sorted(area_sample_range)
-        self.start_offset_range = start_offset_range
         self.predict_sample_range = sorted(predict_sample_range)
 
         self.dataset = self.preprocess_dataset(self.load_dataset())

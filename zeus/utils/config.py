@@ -88,13 +88,6 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
-        "--mock",
-        action="store_true",
-        help="Mock neuron and all network components.",
-        default=False,
-    )
-
-    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",
@@ -120,13 +113,6 @@ def add_args(cls, parser):
         action="store_true",
         help="Runs wandb in offline mode.",
         default=False,
-    )
-
-    parser.add_argument(
-        "--wandb.notes",
-        type=str,
-        help="Notes to add to the wandb run.",
-        default="",
     )
 
 
@@ -159,20 +145,6 @@ def add_miner_args(cls, parser):
         action="store_true",
         help="If set, miners will accept queries from non registered entities. (Dangerous!)",
         default=False,
-    )
-
-    parser.add_argument(
-        "--wandb.project_name",
-        type=str,
-        default="template-miners",
-        help="Wandb project to log to.",
-    )
-
-    parser.add_argument(
-        "--wandb.entity",
-        type=str,
-        default="opentensor-dev",
-        help="Wandb entity to log to.",
     )
 
 
