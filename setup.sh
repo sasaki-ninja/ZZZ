@@ -15,7 +15,7 @@ $PREFIX apt install -y \
     libgl1 \
     npm
 
-$PREFIX npm install -g pm2@latest
+$PREFIX npm install -g pm2@6.0.5
 
 # install repository itself
 pip install -e . --use-pep517

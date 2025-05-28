@@ -144,5 +144,5 @@ class Validator(BaseValidatorNeuron):
 if __name__ == "__main__":
     with Validator() as validator:
         while not validator.should_exit:
-            bt.logging.info(f"Validator running... {time.time()}")
+            bt.logging.info(f"Validator running | uid {validator.uid} | {time.time()}")
             time.sleep(30)

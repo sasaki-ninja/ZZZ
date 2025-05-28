@@ -5,8 +5,8 @@ import numpy as np
 import torch
 
 from zeus.data.sample import Era5Sample
+from zeus.data.converter import get_converter
 from zeus.utils.time import to_timestamp
-from zeus.utils.misc import celcius_to_kelvin
 from zeus.validator.constants import (
     OPEN_METEO_URL
 )
@@ -27,10 +27,11 @@ class OpenMeteoLoader:
         end_time = to_timestamp(sample.end_timestamp)
 
         latitudes, longitudes = sample.x_grid.view(-1, 2).T
+        converter = get_converter(sample.variable)
         params = {
             "latitude": latitudes.tolist(),
             "longitude": longitudes.tolist(),
-            "hourly": "temperature_2m",
+            "hourly": converter.om_name,
             "start_hour": start_time.isoformat(timespec="minutes"),
             "end_hour": end_time.isoformat(timespec="minutes"),
             "apikey": self.api_key
@@ -39,12 +40,12 @@ class OpenMeteoLoader:
         responses = self.open_meteo_api.weather_api(
             self.open_meteo_url, params=params
         )
-        # get temperature output as grid of [time, lat, lon]
+        # get output as grid of [time, lat, lon]
         output = np.stack(
             [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses], axis=1
         ).reshape(-1, sample.x_grid.shape[0], sample.x_grid.shape[1])
-        # OpenMeteo does Celcius, scoring is based on Kelvin
-        output = celcius_to_kelvin(output)
+        # OpenMeteo does not use SI units, so convert back
+        output = converter.om_to_era5(output)
 
         assert output.shape[0] == sample.predict_hours, f"Invalid OpenMeteo response shape"
         return output
