@@ -73,12 +73,12 @@ class Era5CDSLoader(Era5BaseLoader):
         return False
 
     def load_dataset(self) -> Optional[xr.Dataset]:
-        era5_files = self.cache_dir.glob("*.nc")
+        era5_files = self.cache_dir.rglob("*/*.nc")
         datasets = [xr.open_dataset(fname, engine="netcdf4") for fname in era5_files]
         if not datasets:
             return None
 
-        dataset = xr.concat(datasets, "valid_time")
+        dataset = xr.merge(datasets)
         dataset = dataset.sortby("valid_time")
         self.last_stored_timestamp = pd.Timestamp(dataset.valid_time.max().values)
         return dataset
@@ -120,6 +120,7 @@ class Era5CDSLoader(Era5BaseLoader):
             lat_end=lat_end,
             lon_start=lon_start,
             lon_end=lon_end,
+            variable=self.sample_variable(),
             start_timestamp=start_time.timestamp(),
             end_timestamp=end_time.timestamp(),
             predict_hours=predict_hours,
@@ -134,17 +135,22 @@ class Era5CDSLoader(Era5BaseLoader):
             *sample.get_bbox(),
             start_time=to_timestamp(sample.start_timestamp),
             end_time=end_time,
+            variables=sample.variable
         )
         # Slice off the latitude and longitude for the output
         return data4d[..., 2:].squeeze(dim=-1)
 
-    def get_file_name(self, timestamp: pd.Timestamp) -> str:
-        return os.path.join(self.cache_dir, f"era5_{timestamp.strftime('%Y-%m-%d')}.nc")
+    def get_file_name(self, variable: str, timestamp: pd.Timestamp) -> str:
+        return os.path.join(self.cache_dir, variable, f"era5_{timestamp.strftime('%Y-%m-%d')}.nc")
 
-    async def download_era5_day(self, timestamp: pd.Timestamp):
+    def download_era5_day(self, variable: str, timestamp: pd.Timestamp):
+        """
+        Make a request to Copernicus. 
+        Can only request one variable at a time for now, as it will otherwise zip them
+        """
         request = {
             "product_type": ["reanalysis"],
-            "variable": self.data_vars,
+            "variable": [variable],
             "year": [str(timestamp.year)],
             "month": [str(timestamp.month).zfill(2)],
             "day": [str(timestamp.day).zfill(2)],
@@ -178,12 +184,14 @@ class Era5CDSLoader(Era5BaseLoader):
             "download_format": "unarchived",
         }
         try:
-            filename = self.get_file_name(timestamp)
+            filename = self.get_file_name(variable, timestamp)
+            Path(filename).parent.mkdir(exist_ok=True)
             self.client.retrieve(
                 "reanalysis-era5-single-levels", request, target=filename
             )
+
             bt.logging.info(
-                f"Downloaded ERA5 data for {timestamp.strftime('%Y-%m-%d')} to {filename}"
+                f"Downloaded {variable} ERA5 data for {timestamp.strftime('%Y-%m-%d')} to {filename}"
             )
         except Exception as e:
             # Most errors can occur and should continue, but force validators to authenticate.
@@ -193,7 +201,7 @@ class Era5CDSLoader(Era5BaseLoader):
                 )
             else:
                 bt.logging.error(
-                    f"Failed to download ERA5 data for {timestamp.strftime('%Y-%m-%d')}: {e}"
+                    f"Failed to download {variable} ERA5 data for {timestamp.strftime('%Y-%m-%d')}: {e}"
                 )
 
     async def update_cache(self):
@@ -201,16 +209,17 @@ class Era5CDSLoader(Era5BaseLoader):
         tasks = []
         expected_files = set()
 
-        for days_ago in range(
-            self.ERA5_DELAY_DAYS,
-            self.ERA5_DELAY_DAYS + math.ceil(self.predict_sample_range[1] / 24) + 1,
-        ):
-            timestamp = current_day - pd.Timedelta(days=days_ago)
-            filename = self.get_file_name(timestamp)
-            expected_files.add(filename)
-            # always download the five days ago file since its hours might have been updated.
-            if not os.path.isfile(filename) or days_ago == self.ERA5_DELAY_DAYS:
-                tasks.append(self.download_era5_day(timestamp))
+        for variable in self.data_vars:
+            for days_ago in range(
+                self.ERA5_DELAY_DAYS,
+                self.ERA5_DELAY_DAYS + math.ceil(self.predict_sample_range[1] / 24) + 1,
+            ):
+                timestamp = current_day - pd.Timedelta(days=days_ago)
+                filename = self.get_file_name(variable, timestamp)
+                expected_files.add(filename)
+                # always download the five days ago file since its hours might have been updated.
+                if not os.path.isfile(filename) or days_ago == self.ERA5_DELAY_DAYS:
+                    tasks.append(asyncio.to_thread(self.download_era5_day, variable, timestamp))
 
         await asyncio.gather(*tasks)
         self.dataset = self.preprocess_dataset(self.load_dataset())
@@ -221,7 +230,7 @@ class Era5CDSLoader(Era5BaseLoader):
             )
 
         # remove any old cache.
-        for file in self.cache_dir.glob("*.nc"):
+        for file in self.cache_dir.rglob("*.nc"):
             if str(file) not in expected_files:
                 os.remove(file)
 

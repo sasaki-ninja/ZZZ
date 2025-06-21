@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union, Dict
 from abc import ABC, abstractmethod
 import xarray as xr
 import numpy as np
@@ -6,6 +6,7 @@ import torch
 import pandas as pd
 
 from zeus.data.sample import Era5Sample
+from zeus.data.converter import get_converter
 from zeus.validator.constants import (
     ERA5_DATA_VARS,
     ERA5_LATITUDE_RANGE,
@@ -19,14 +20,15 @@ class Era5BaseLoader(ABC):
     def __init__(
         self,
         predict_sample_range: Tuple[float, float],
-        data_vars: List[str] = ERA5_DATA_VARS,
+        data_vars: Dict[str, float] = ERA5_DATA_VARS,
         lat_range: Tuple[float, float] = ERA5_LATITUDE_RANGE,
         lon_range: Tuple[float, float] = ERA5_LONGITUDE_RANGE,
         area_sample_range: Tuple[ float, float] = ERA5_AREA_SAMPLE_RANGE
 
     ) -> None:
-        self.data_vars = data_vars
-
+        self.data_vars, self.data_var_probs = zip(*sorted(data_vars.items()))
+        self.data_var_probs = np.array(self.data_var_probs)
+        
         self.lat_range = sorted(lat_range)
         self.lon_range = sorted(lon_range)
 
@@ -85,6 +87,10 @@ class Era5BaseLoader(ABC):
         )
         lon_end = lon_start + np.random.randint(*self.area_sample_range) / fidelity
         return lat_start, lat_end, lon_start, lon_end
+    
+    def sample_variable(self) -> str:
+        norm_probs = self.data_var_probs / self.data_var_probs.sum()
+        return np.random.choice(self.data_vars, p=norm_probs)
 
     def get_data(
         self,
@@ -94,13 +100,19 @@ class Era5BaseLoader(ABC):
         lon_end: float,
         start_time: pd.Timestamp,
         end_time: pd.Timestamp,
+        variables: Optional[Union[str, List[str]]] = None
     ) -> torch.Tensor:
         """
         Get a sample from the dataset for a specific location and time range.
+        You can specify the variable (needs to be in self.data_vars), if not all are returned
 
         Returns:
          - sample (torch.Tensor): The sample containing the input and output data as a 4D tensor.
         """
+        variables = variables or self.data_vars
+        if isinstance(variables, str):
+            variables = [variables]
+        shortcodes = [get_converter(variable).short_code for variable in variables]
 
         subset = self.dataset.sel(
             latitude=slice(lat_start, lat_end),
@@ -118,7 +130,7 @@ class Era5BaseLoader(ABC):
         y_grid = torch.stack(
             [
                 torch.as_tensor(subset[var].data, dtype=torch.float)
-                for var in subset.data_vars
+                for var in shortcodes
             ],
             dim=-1,
         )  # (time, lat, lon, data_vars)

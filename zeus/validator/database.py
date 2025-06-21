@@ -49,13 +49,18 @@ class ResponseDatabase:
                     start_timestamp REAL,
                     end_timestamp REAL,
                     hours_to_predict INTEGER,
-                    baseline TEXT
+                    baseline TEXT,
+                    inserted_at REAL,
+                    variable TEXT DEFAULT '2m_temperature'
                 );
                 """
             )
-            # migrate from v0.x -> v1.0.0
-            if not column_exists(cursor, "challenges", "baseline"):
-                cursor.execute("ALTER TABLE challenges ADD COLUMN baseline TEXT;")
+            # migrate from v1.0.0 -> v1.1.0
+            if not column_exists(cursor, "challenges", "inserted_at"):
+                cursor.execute("ALTER TABLE challenges ADD COLUMN inserted_at REAL;")
+
+            if not column_exists(cursor, "challenges", "variable"):
+                cursor.execute("ALTER TABLE challenges ADD COLUMN variable TEXT DEFAULT '2m_temperature';")
 
             # miner responses, we will use JSON for the tensor.
             cursor.execute(
@@ -91,15 +96,17 @@ class ResponseDatabase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO challenges (lat_start, lat_end, lon_start, lon_end, start_timestamp, end_timestamp, hours_to_predict, baseline)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO challenges (lat_start, lat_end, lon_start, lon_end, start_timestamp, end_timestamp, hours_to_predict, baseline, inserted_at, variable)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     *sample.get_bbox(),
                     sample.start_timestamp,
                     sample.end_timestamp,
                     sample.predict_hours,
-                    json.dumps(sample.output_data.tolist())
+                    json.dumps(sample.output_data.tolist()),
+                    sample.query_timestamp,
+                    sample.variable
                 ),
             )
             challenge_uid = cursor.lastrowid
@@ -145,7 +152,7 @@ class ResponseDatabase:
         """
         latest_available = self.cds_loader.last_stored_timestamp.timestamp()
 
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             cursor = conn.cursor()
             # get all challenges that we can now score
             cursor.execute(
@@ -168,9 +175,13 @@ class ResponseDatabase:
                 end_timestamp,
                 hours_to_predict,
                 baseline,
+                inserted_at,
+                variable,
             ) = challenge
 
             sample = Era5Sample(
+                variable=variable,
+                query_timestamp=inserted_at,
                 start_timestamp=start_timestamp,
                 end_timestamp=end_timestamp,
                 lat_start=lat_start,
@@ -185,8 +196,7 @@ class ResponseDatabase:
                 continue
             sample.output_data = output
 
-            if baseline is not None:
-                baseline = torch.tensor(json.loads(baseline))
+            baseline = torch.tensor(json.loads(baseline))
 
             # load the miner predictions
             with sqlite3.connect(self.db_path) as conn:
@@ -203,7 +213,7 @@ class ResponseDatabase:
                 predictions = [
                     torch.tensor(json.loads(response[2])) for response in responses
                 ]
-
+            
             # don't score while database is open in case there is a metagraph delay.
             score_func(sample, baseline, miner_hotkeys, predictions)
 

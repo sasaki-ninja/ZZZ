@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union, List
 import torch
+import time
 
 from zeus.utils.coordinates import get_grid
 from zeus.protocol import TimePredictionSynapse
@@ -16,6 +17,8 @@ class Era5Sample:
         lat_end: float,
         lon_start: float,
         lon_end: float,
+        variable: str,
+        query_timestamp: Optional[int] = None,
         output_data: Optional[torch.Tensor] = None,
         predict_hours: Optional[int] = None,
     ):
@@ -29,6 +32,9 @@ class Era5Sample:
         self.lat_end = lat_end
         self.lon_start = lon_start
         self.lon_end = lon_end
+
+        self.variable = variable
+        self.query_timestamp = query_timestamp or round(time.time())
 
         self.output_data = output_data
         self.predict_hours = predict_hours
@@ -55,4 +61,5 @@ class Era5Sample:
             start_time=self.start_timestamp,
             end_time=self.end_timestamp,
             requested_hours=self.predict_hours,
+            variable=self.variable
         )

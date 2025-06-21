@@ -25,7 +25,7 @@ import bittensor as bt
 import openmeteo_requests
 
 import numpy as np
-from zeus.utils.misc import celcius_to_kelvin
+from zeus.data.converter import get_converter
 from zeus.utils.config import get_device_str
 from zeus.utils.time import to_timestamp
 from zeus.protocol import TimePredictionSynapse
@@ -71,28 +71,29 @@ class Miner(BaseMinerNeuron):
         start_time = to_timestamp(synapse.start_time)
         end_time = to_timestamp(synapse.end_time)
         bt.logging.info(
-            f"Received request! Predicting {synapse.requested_hours} hours for grid of shape {coordinates.shape}."
+            f"Received request! Predicting {synapse.requested_hours} hours of {synapse.variable} for grid of shape {coordinates.shape}."
         )
 
         ##########################################################################################################
         # TODO (miner) you likely want to improve over this baseline of calling OpenMeteo by changing this section
         latitudes, longitudes = coordinates.view(-1, 2).T
+        converter = get_converter(synapse.variable)
         params = {
             "latitude": latitudes.tolist(),
             "longitude": longitudes.tolist(),
-            "hourly": "temperature_2m",
+            "hourly": converter.om_name,
             "start_hour": start_time.isoformat(timespec="minutes"),
             "end_hour": end_time.isoformat(timespec="minutes"),
         }
         responses = self.openmeteo_api.weather_api(
             "https://api.open-meteo.com/v1/forecast", params=params
         )
-        # get temperature output as grid of [time, lat, lon]
+        # get output as grid of [time, lat, lon]
         output = np.stack(
             [r.Hourly().Variables(0).ValuesAsNumpy() for r in responses], axis=1
         ).reshape(-1, coordinates.shape[0], coordinates.shape[1])
-        # OpenMeteo does Celcius, scoring is based on Kelvin
-        output = celcius_to_kelvin(output)
+        # OpenMeteo does not use SI units, so convert back
+        output = converter.om_to_era5(output)
 
         ##########################################################################################################
         bt.logging.info(f"Output shape is {output.shape}")

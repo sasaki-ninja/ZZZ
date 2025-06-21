@@ -23,7 +23,6 @@ from zeus.validator.miner_data import MinerData
 from zeus.validator.constants import (
     REWARD_DIFFICULTY_SCALER,  
     REWARD_IMPROVEMENT_WEIGHT,
-    REWARD_IMPROVEMENT_MIN_DELTA
 )
 
 
@@ -140,6 +139,7 @@ def set_rewards(
     miners_data: List[MinerData],
     baseline_data: Optional[torch.Tensor],
     difficulty_grid: np.ndarray,
+    min_sota_delta: float
 ) -> List[MinerData]:
     """
     Calculates rewards for miner predictions based on RMSE and relative difficulty.
@@ -172,7 +172,7 @@ def set_rewards(
     # compute unnormalised scores
     for miner_data in miners_data:
         miner_data.rmse = rmse(output_data, miner_data.prediction)
-        improvement = baseline_rmse - miner_data.rmse - REWARD_IMPROVEMENT_MIN_DELTA
+        improvement = baseline_rmse - miner_data.rmse - min_sota_delta
         miner_data.baseline_improvement = max(0, improvement)
 
     quality_scores = get_curved_scores([m.rmse for m in miners_data], gamma)

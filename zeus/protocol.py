@@ -18,7 +18,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 from abc import ABC
-import typing
 import bittensor as bt
 import torch
 
@@ -52,6 +51,14 @@ class PredictionSynapse(bt.Synapse, ABC):
         title="Prediction",
         description="The output tensor to be scored.",
         default=[],
+        frozen=False,
+    )
+
+    # See https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation#ERA5:datadocumentation-Parameterlistings
+    variable: str = Field(
+        title="ERA5 variable you are asked to predict",
+        description="Each request concerns a single CDS variable in long underscored form",
+        default="",
         frozen=False,
     )
 

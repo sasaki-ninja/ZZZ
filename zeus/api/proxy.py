@@ -18,16 +18,16 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from timezonefinder import TimezoneFinder
 
 from zeus.validator.constants import (
-    LIVE_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K
+    LIVE_START_OFFSET_RANGE, ERA5_AREA_SAMPLE_RANGE, PROXY_QUERY_K, ERA5_DATA_VARS
 )
 from zeus.base.validator import BaseValidatorNeuron
 from zeus.validator.reward import help_format_miner_output, get_shape_penalty
 from zeus.protocol import TimePredictionSynapse
 from zeus.utils.time import get_today, get_hours, safe_tz_convert
 from zeus.utils.coordinates import get_grid, expand_to_grid, interp_coordinates
+from zeus.data.converter import get_converter, VariableConverter
 
 from zeus.api.eager_dendrite import EagerDendrite
-
 
 class ValidatorProxy:
     def __init__(
@@ -123,9 +123,11 @@ class ValidatorProxy:
             ), f"Area range invalid. With 0.25 degree fidelity, each dimension should be in {ERA5_AREA_SAMPLE_RANGE}"
 
             start_time, end_time, predict_hours = self._parse_time_inputs(payload)
+            variable_conv = self._parse_variable_input(payload)
 
             synapse = TimePredictionSynapse(
                 locations=grid.tolist(),
+                variable=variable_conv.data_var,
                 start_time=start_time.timestamp(),
                 end_time=end_time.timestamp(),
                 requested_hours=predict_hours,
@@ -157,7 +159,14 @@ class ValidatorProxy:
             return HTTPException(status_code=500, detail="No valid response received from miners")
         
         bt.logging.info(f"[PROXY] Obtained a valid eager prediction.")
-        return self.format_response(request_start, prediction, grid, start_time, end_time)
+        return self.format_response(
+            request_start, 
+            prediction, 
+            grid, 
+            start_time, 
+            end_time, 
+            converter=variable_conv,
+        )
 
 
     async def predict_point_temperature(self, request: Request):
@@ -175,9 +184,11 @@ class ValidatorProxy:
             grid = expand_to_grid(lat, lon)
 
             start_time, end_time, predict_hours = self._parse_time_inputs(payload)
+            variable_conv = self._parse_variable_input(payload)
 
             synapse = TimePredictionSynapse(
                 locations=grid.tolist(),
+                variable=variable_conv.data_var,
                 start_time=start_time.timestamp(),
                 end_time=end_time.timestamp(),
                 requested_hours=predict_hours,
@@ -212,7 +223,14 @@ class ValidatorProxy:
 
         prediction = interp_coordinates(prediction, grid, lat, lon)
         expanded_loc = torch.tensor([lat, lon])[None, None, :]
-        return self.format_response(request_start, prediction, expanded_loc, start_time, end_time)
+        return self.format_response(
+            request_start, 
+            prediction, 
+            expanded_loc, 
+            start_time, 
+            end_time, 
+            converter=variable_conv,
+        )
 
 
     def _parse_time_inputs(self, payload):
@@ -244,6 +262,12 @@ class ValidatorProxy:
     
         return start_time, end_time, int(predict_hours)
     
+    def _parse_variable_input(self, payload) -> VariableConverter:
+        # default to 2m_temperature for backwards compatibility
+        variable_name = payload.get("variable", "2m_temperature")
+        assert variable_name in ERA5_DATA_VARS, "This variable is not supported yet!"
+
+        return get_converter(variable_name)
 
     def format_response(
             self, 
@@ -252,7 +276,9 @@ class ValidatorProxy:
             location_grid: torch.Tensor,
             start_time: pd.Timestamp,
             end_time: pd.Timestamp,
+            converter: VariableConverter,
     ) -> Dict[str, Any]:
+        
         timestamps = pd.date_range(
             start_time.tz_localize("GMT+0"), 
             end_time.tz_localize("GMT+0"),
@@ -281,9 +307,9 @@ class ValidatorProxy:
         return {
                 "generation_time": time.time() - generation_start,
                 "grid": location_grid.tolist(),
-                "2m_temperature": {
+                converter.data_var: {
                     "data": prediction.tolist(),
-                    "unit": "K"
+                    "unit": converter.unit
                 },
                 "time": {
                     "data": time_data,

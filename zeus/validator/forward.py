@@ -34,7 +34,7 @@ from zeus.validator.reward import set_rewards, set_penalties, rmse
 from zeus.validator.miner_data import MinerData
 from zeus.utils.logging import maybe_reset_wandb
 from zeus.base.validator import BaseValidatorNeuron
-from zeus.validator.constants import FORWARD_DELAY_SECONDS
+from zeus.validator.constants import FORWARD_DELAY_SECONDS, REWARD_IMPROVEMENT_MIN_DELTA
 
 
 async def forward(self: BaseValidatorNeuron):
@@ -63,7 +63,7 @@ async def forward(self: BaseValidatorNeuron):
     bt.logging.info(f"Sampling data...")
     sample = data_loader.get_sample()
     bt.logging.success(
-        f"Data sampled with bounding box {bbox_to_str(sample.get_bbox())}"
+        f"Data sampled with bounding box {bbox_to_str(sample.get_bbox())} for variable {sample.variable}"
     )
     bt.logging.success(
         f"Data sampled starts from {timestamp_to_str(sample.start_timestamp)} | Asked to predict {sample.predict_hours} hours ahead."
@@ -166,14 +166,16 @@ def complete_challenge(
         output_data=sample.output_data, 
         miners_data=miners_data, 
         baseline_data=baseline,
-        difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample)
+        difficulty_grid=self.difficulty_loader.get_difficulty_grid(sample),
+        min_sota_delta=REWARD_IMPROVEMENT_MIN_DELTA[sample.variable]
     )
 
     self.update_scores(
         [miner.reward for miner in miners_data],
         [miner.uid for miner in miners_data],
     )
-
+    
+    bt.logging.success(f"Scored stored challenges for uids: {[miner.uid for miner in miners_data]}")
     for miner in miners_data:
         bt.logging.debug(
             f"UID: {miner.uid} | Predicted shape: {miner.prediction.shape} | Reward: {miner.reward} | Penalty: {miner.shape_penalty}"
@@ -192,13 +194,15 @@ def do_wandb_logging(
     
     for miner in miners_data:
         wandb.log(
-            {f"miner_{miner.uid}_{key}": val for key, val in miner.metrics.items()},
+            {f"miner_{challenge.variable}_{miner.uid}_{key}": val for key, val in miner.metrics.items()},
             commit=False,  # All logging should be the same commit
         )
 
     uid_to_hotkey = {miner.uid: miner.hotkey for miner in miners_data}
     wandb.log(
         {
+            "query_timestamp": challenge.query_timestamp,
+            "variable": challenge.variable,
             "start_timestamp": challenge.start_timestamp,
             "end_timestamp": challenge.end_timestamp,
             "predict_hours": challenge.predict_hours,
